@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { WaffoPancake, verifyWebhook } from '@waffo/pancake-ts';
+import type { TaxCategory } from '@waffo/pancake-ts';
 import { currencyDecimals, toMajorUnits } from '../../money';
 import type { PaidOrderInput, ShippingAddress } from '../orders/db';
 import type { CheckoutResult, CreateCheckoutParams, PaymentProvider, WebhookResult } from './provider';
@@ -13,7 +14,6 @@ const TAX_CATEGORIES = [
   'consulting',
   'professional_service',
 ] as const;
-type TaxCategory = (typeof TAX_CATEGORIES)[number];
 
 const nonEmpty = (value: string | undefined | null): string | null => {
   const trimmed = value?.trim();
