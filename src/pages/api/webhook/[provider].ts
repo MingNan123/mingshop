@@ -10,12 +10,10 @@ import { recordPaidWebhookOrder } from '../../../features/orders/recordWebhook';
 
 export const prerender = false;
 
-const METHODS: PaymentMethod[] = ['stripe', 'lightning', 'opennode'];
+const METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
 
-// Per-provider webhook: POST /api/webhook/<method>. Lets multiple rails run at
-// once — each posts to its OWN path, because a single endpoint can only verify
-// one provider's signature. Point each provider's webhook config at its path
-// (Stripe dashboard → /api/webhook/stripe, the Lightning mint → /api/webhook/lightning).
+// Per-provider webhook: POST /api/webhook/<method>. Each rail has its own
+// signature scheme, so it must terminate at a provider-specific endpoint.
 export const POST: APIRoute = async ({ request, params }) => {
   const method = params.provider as PaymentMethod;
   const settings = await getStoreSettings(env.DB);
@@ -23,6 +21,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     return new Response('Unknown or unconfigured payment method', { status: 404 });
   }
 
+  // Waffo signature verification depends on the exact raw request body.
   const payload = await request.text();
   const origin = new URL(request.url).origin;
 
