@@ -64,6 +64,29 @@ function billingDetail(address: ShippingAddress) {
   return detail;
 }
 
+function describeProviderError(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) return { errorType: typeof error, error: String(error) };
+  const candidate = error as Error & {
+    code?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown; data?: unknown; error?: unknown };
+    cause?: unknown;
+  };
+  const details: Record<string, unknown> = {
+    errorType: error.constructor?.name ?? 'Error',
+    message: error.message,
+  };
+  if (candidate.code != null) details.code = candidate.code;
+  if (candidate.status != null) details.status = candidate.status;
+  if (candidate.statusCode != null) details.statusCode = candidate.statusCode;
+  if (candidate.response?.status != null) details.responseStatus = candidate.response.status;
+  if (candidate.response?.data != null) details.responseData = candidate.response.data;
+  if (candidate.response?.error != null) details.responseError = candidate.response.error;
+  if (candidate.cause != null) details.cause = candidate.cause instanceof Error ? candidate.cause.message : candidate.cause;
+  return details;
+}
+
 interface WaffoWebhookData {
   orderMetadata?: Record<string, unknown> | null;
   orderMerchantExternalId?: unknown;
@@ -134,18 +157,30 @@ export function createWaffoProvider(): PaymentProvider {
         if (selectedShipping.address.line1 || selectedShipping.address.country) metadata.shipping_address = JSON.stringify(selectedShipping.address);
       }
 
-      const session = await client.checkout.createSession({
-        productId,
-        currency,
-        priceSnapshot: { amount: displayAmount(chargeableMinor, currency), taxCategory },
-        buyerEmail: params.selectedShipping?.email ?? undefined,
-        billingDetail: selectedShipping?.address.country ? billingDetail(selectedShipping.address) : undefined,
-        successUrl: params.successUrl,
-        metadata,
-        orderMerchantExternalId: reservationId,
-        expiresInSeconds: 45 * 60,
-      });
-      return { url: session.checkoutUrl };
+      try {
+        const session = await client.checkout.createSession({
+          productId,
+          currency,
+          priceSnapshot: { amount: displayAmount(chargeableMinor, currency), taxCategory },
+          buyerEmail: params.selectedShipping?.email ?? undefined,
+          billingDetail: selectedShipping?.address.country ? billingDetail(selectedShipping.address) : undefined,
+          successUrl: params.successUrl,
+          metadata,
+          orderMerchantExternalId: reservationId,
+          expiresInSeconds: 45 * 60,
+        });
+        return { url: session.checkoutUrl };
+      } catch (error) {
+        console.error('Waffo checkout.createSession failed', {
+          merchantId: productId ? 'configured' : 'missing',
+          productId: productId ? 'configured' : 'missing',
+          currency,
+          amount: displayAmount(chargeableMinor, currency),
+          taxCategory,
+          error: describeProviderError(error),
+        });
+        throw new Error('Waffo checkout creation failed. Check Worker logs for the provider error details.');
+      }
     },
 
     async verifyWebhook(payload: string, headers: Headers): Promise<WebhookResult> {
