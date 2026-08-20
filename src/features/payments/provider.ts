@@ -2,13 +2,14 @@ import type { PaidOrderInput, ShippingAddress } from '../orders/db';
 
 /** Keep anonymous hosted inventory holds short and aligned with provider expiry. */
 export const STRIPE_CHECKOUT_TTL_SECONDS = 30 * 60;
+export const WAFFO_CHECKOUT_TTL_SECONDS = 45 * 60;
 export const OPENNODE_CHECKOUT_TTL_SECONDS = 10 * 60;
 export const RESERVATION_EXPIRY_GRACE_SECONDS = 5 * 60;
 
 /**
  * Payment provider port (ports-and-adapters). The checkout + webhook routes
  * depend on this interface, not on Stripe directly — swapping to Paddle / Lemon
- * Squeezy means writing one new adapter, no route changes.
+ * Squeezy / Waffo means writing one new adapter, no route changes.
  */
 
 export interface CheckoutLineItem {
@@ -58,9 +59,8 @@ export interface CreateCheckoutParams {
   };
   /**
    * Set when the in-app step has ALREADY collected an address and a chosen rate
-   * (Lightning, OpenNode, Demo). Adapters charge and snapshot exactly this instead
-   * of guessing from an unselected list — picking `options[0]` was how the demo
-   * rail silently charged the wrong rate and OpenNode charged none at all.
+   * (Lightning, OpenNode, Demo, or Waffo). Adapters charge and snapshot exactly this
+   * instead of guessing from an unselected list.
    */
   selectedShipping?: {
     label: string;
@@ -81,8 +81,8 @@ export interface CheckoutResult {
   /**
    * Lightning only: the payable BOLT11 invoice + metadata, so a programmatic
    * caller (an agent with a wallet) can pay WITHOUT visiting the /pay page.
-   * Undefined for hosted-redirect providers (Stripe/OpenNode) — those require a
-   * human on the hosted page, so there's nothing machine-payable to expose.
+   * Undefined for hosted-redirect providers (Stripe/OpenNode/Waffo) — those require
+   * a human on the hosted page, so there's nothing machine-payable to expose.
    */
   lightning?: {
     /** BOLT11 invoice string (`lnbc…`). */
@@ -130,7 +130,7 @@ export interface PaymentProvider {
   createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult>;
   /**
    * Verify an incoming webhook and normalize it. Implementations read their own
-   * signature header from `headers`. Throws on an invalid/forged signature.
+   * signature header from `headers`.
    */
   verifyWebhook(payload: string, headers: Headers): Promise<WebhookResult>;
   /**
