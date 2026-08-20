@@ -92,6 +92,13 @@ export function createWaffoProvider(): PaymentProvider {
       const metadata: Record<string, string> = { ...(params.metadata ?? {}) };
       const reservationId = metadata.reservation_id;
       if (reservationId) metadata.reservation_id = reservationId;
+      if (params.selectedShipping) {
+        metadata.shipping_cents = String(params.selectedShipping.amountCents);
+        metadata.shipping_label = params.selectedShipping.label.slice(0, 120);
+        metadata.shipping_weight_grams = String(params.selectedShipping.weightGrams ?? '');
+        metadata.delivery_method = params.selectedShipping.deliveryMethod;
+        metadata.shipping_address = JSON.stringify(params.selectedShipping.address);
+      }
 
       const session = await client.checkout.createSession({
         productId,
@@ -127,11 +134,26 @@ export function createWaffoProvider(): PaymentProvider {
       if (event.eventType === 'order.completed') {
         const amount = Number(data.total ?? data.amount);
         const taxAmount = Number(data.taxAmount ?? '0');
+        const decimals = currencyDecimals(data.currency);
+        const shippingCents = Number(metadata.shipping_cents ?? '0');
         if (!Number.isFinite(amount) || amount < 0) {
           throw new Error('Waffo webhook contained an invalid order amount.');
         }
         if (!Number.isFinite(taxAmount) || taxAmount < 0) {
           throw new Error('Waffo webhook contained an invalid tax amount.');
+        }
+        if (!Number.isInteger(shippingCents) || shippingCents < 0) {
+          throw new Error('Waffo webhook contained invalid shipping metadata.');
+        }
+
+        let shippingAddress: ShippingAddress | null = null;
+        if (metadata.shipping_address) {
+          try {
+            const parsed = JSON.parse(metadata.shipping_address) as ShippingAddress;
+            if (parsed && typeof parsed === 'object') shippingAddress = parsed;
+          } catch {
+            throw new Error('Waffo webhook contained invalid shipping address metadata.');
+          }
         }
 
         const order: PaidOrderInput = {
@@ -139,12 +161,21 @@ export function createWaffoProvider(): PaymentProvider {
           publicId: reservationId,
           reservationId,
           email: data.buyerEmail || null,
-          amountTotalCents: Math.round(amount * 10 ** currencyDecimals(data.currency)),
-          taxCents: Math.round(taxAmount * 10 ** currencyDecimals(data.currency)),
+          amountTotalCents: Math.round(amount * 10 ** decimals),
+          shippingCents,
+          shippingLabel: metadata.shipping_label ?? null,
+          shippingWeightGrams: metadata.shipping_weight_grams
+            ? Number(metadata.shipping_weight_grams)
+            : null,
+          deliveryMethod:
+            metadata.delivery_method === 'pickup' || metadata.delivery_method === 'shipping'
+              ? metadata.delivery_method
+              : null,
+          shippingAddress,
+          taxCents: Math.round(taxAmount * 10 ** decimals),
           currency: data.currency,
           paymentMethod: 'waffo',
           providerPaymentId: data.paymentId ?? data.orderId ?? null,
-          shippingCents: 0,
           items: [],
         };
 
