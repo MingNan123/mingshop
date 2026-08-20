@@ -2,29 +2,38 @@ import { env } from 'cloudflare:workers';
 import { WaffoPancake, verifyWebhook } from '@waffo/pancake-ts';
 import { currencyDecimals, toMajorUnits } from '../../money';
 import type { PaidOrderInput, ShippingAddress } from '../orders/db';
-import type {
-  CheckoutResult,
-  CreateCheckoutParams,
-  PaymentProvider,
-  WebhookResult,
-} from './provider';
+import type { CheckoutResult, CreateCheckoutParams, PaymentProvider, WebhookResult } from './provider';
+
+const TAX_CATEGORIES = [
+  'digital_goods',
+  'saas',
+  'software',
+  'ebook',
+  'online_course',
+  'consulting',
+  'professional_service',
+] as const;
+type TaxCategory = (typeof TAX_CATEGORIES)[number];
 
 const nonEmpty = (value: string | undefined | null): string | null => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 };
 
+function getTaxCategory(value: string): TaxCategory {
+  if ((TAX_CATEGORIES as readonly string[]).includes(value)) return value as TaxCategory;
+  throw new Error(`Unsupported Waffo tax category: ${value}`);
+}
+
 function getWaffoConfig() {
   const merchantId = nonEmpty(env.WAFFO_MERCHANT_ID);
   const privateKey = nonEmpty(env.WAFFO_PRIVATE_KEY);
   const productId = nonEmpty(env.WAFFO_PRODUCT_ID);
-  const taxCategory = nonEmpty(env.WAFFO_TAX_CATEGORY);
-  if (!merchantId || !privateKey || !productId || !taxCategory) {
-    throw new Error(
-      'Waffo is not fully configured. Set WAFFO_MERCHANT_ID, WAFFO_PRIVATE_KEY, WAFFO_PRODUCT_ID and WAFFO_TAX_CATEGORY.',
-    );
+  const rawTaxCategory = nonEmpty(env.WAFFO_TAX_CATEGORY);
+  if (!merchantId || !privateKey || !productId || !rawTaxCategory) {
+    throw new Error('Waffo is not fully configured. Set WAFFO_MERCHANT_ID, WAFFO_PRIVATE_KEY, WAFFO_PRODUCT_ID and WAFFO_TAX_CATEGORY.');
   }
-  return { merchantId, privateKey, productId, taxCategory };
+  return { merchantId, privateKey, productId, taxCategory: getTaxCategory(rawTaxCategory) };
 }
 
 export function isWaffoConfigured(): boolean {
@@ -46,12 +55,7 @@ function displayAmount(minorUnits: number, currency: string): string {
 }
 
 function billingDetail(address: ShippingAddress) {
-  const detail: {
-    country: string;
-    isBusiness: boolean;
-    postcode?: string;
-    state?: string;
-  } = {
+  const detail: { country: string; isBusiness: boolean; postcode?: string; state?: string } = {
     country: address.country ?? '',
     isBusiness: false,
   };
@@ -60,16 +64,29 @@ function billingDetail(address: ShippingAddress) {
   return detail;
 }
 
+interface WaffoWebhookData {
+  orderMetadata?: Record<string, unknown> | null;
+  orderMerchantExternalId?: unknown;
+  orderId?: unknown;
+  paymentId?: unknown;
+  eventId?: unknown;
+  buyerEmail?: unknown;
+  total?: unknown;
+  amount?: unknown;
+  taxAmount?: unknown;
+  currency?: unknown;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : value == null ? null : String(value);
+}
+
 export function createWaffoProvider(): PaymentProvider {
   return {
     async createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult> {
       const { productId, taxCategory } = getWaffoConfig();
       const client = createClient();
-
-      const subtotalMinor = params.lineItems.reduce(
-        (sum, line) => sum + line.amountCents * line.quantity,
-        0,
-      );
+      const subtotalMinor = params.lineItems.reduce((sum, line) => sum + line.amountCents * line.quantity, 0);
       const fallbackShipping =
         params.selectedShipping == null && params.shipping
           ? params.shipping.options.length === 1
@@ -79,24 +96,17 @@ export function createWaffoProvider(): PaymentProvider {
               : undefined
           : null;
       if (fallbackShipping === undefined) {
-        throw new Error(
-          'Waffo checkout requires a single shipping rate. Configure one Waffo-compatible rate or use another payment method.',
-        );
+        throw new Error('Waffo checkout requires a single shipping rate. Configure one Waffo-compatible rate or use another payment method.');
       }
-
       const shippingMinor = params.selectedShipping?.amountCents ?? fallbackShipping?.amountCents ?? 0;
       const chargeableMinor = subtotalMinor + shippingMinor;
       const currency = params.lineItems[0]?.currency?.toUpperCase();
       if (!currency) throw new Error('Waffo checkout requires at least one line item currency.');
-      if (params.lineItems.some((line) => line.currency.toUpperCase() !== currency)) {
-        throw new Error('Waffo checkout cannot mix currencies in one session.');
-      }
+      if (params.lineItems.some((line) => line.currency.toUpperCase() !== currency)) throw new Error('Waffo checkout cannot mix currencies in one session.');
       if (chargeableMinor <= 0) throw new Error('Waffo checkout amount must be greater than zero.');
 
       const metadata: Record<string, string> = { ...(params.metadata ?? {}) };
       const reservationId = metadata.reservation_id;
-      if (reservationId) metadata.reservation_id = reservationId;
-
       const selectedShipping = params.selectedShipping ??
         (fallbackShipping
           ? {
@@ -116,50 +126,48 @@ export function createWaffoProvider(): PaymentProvider {
               email: null,
             }
           : null);
-
       if (selectedShipping) {
         metadata.shipping_cents = String(selectedShipping.amountCents);
         metadata.shipping_label = selectedShipping.label.slice(0, 120);
         metadata.shipping_weight_grams = String(selectedShipping.weightGrams ?? '');
         metadata.delivery_method = selectedShipping.deliveryMethod;
-        if (selectedShipping.address.line1 || selectedShipping.address.country) {
-          metadata.shipping_address = JSON.stringify(selectedShipping.address);
-        }
+        if (selectedShipping.address.line1 || selectedShipping.address.country) metadata.shipping_address = JSON.stringify(selectedShipping.address);
       }
 
       const session = await client.checkout.createSession({
         productId,
         currency,
-        priceSnapshot: {
-          amount: displayAmount(chargeableMinor, currency),
-          taxCategory,
-        },
+        priceSnapshot: { amount: displayAmount(chargeableMinor, currency), taxCategory },
         buyerEmail: params.selectedShipping?.email ?? undefined,
-        billingDetail: selectedShipping?.address.country
-          ? billingDetail(selectedShipping.address)
-          : undefined,
+        billingDetail: selectedShipping?.address.country ? billingDetail(selectedShipping.address) : undefined,
         successUrl: params.successUrl,
         metadata,
         orderMerchantExternalId: reservationId,
         expiresInSeconds: 45 * 60,
       });
-
       return { url: session.checkoutUrl };
     },
 
     async verifyWebhook(payload: string, headers: Headers): Promise<WebhookResult> {
       const signature = headers.get('x-waffo-signature');
       if (!signature) throw new Error('Missing X-Waffo-Signature header.');
-
       const event = verifyWebhook(payload, signature);
-      const data = event.data;
-      const metadata = data.orderMetadata ?? {};
-      const reservationId = metadata.reservation_id ?? data.orderMerchantExternalId ?? undefined;
+      const data = event.data as WaffoWebhookData;
+      const metadata: Record<string, string> = {};
+      if (data.orderMetadata && typeof data.orderMetadata === 'object') {
+        for (const [key, value] of Object.entries(data.orderMetadata)) {
+          const stringified = stringValue(value);
+          if (stringified !== null) metadata[key] = stringified;
+        }
+      }
+      const reservationId = metadata.reservation_id ?? stringValue(data.orderMerchantExternalId) ?? undefined;
 
       if (event.eventType === 'order.completed') {
+        const currency = stringValue(data.currency);
+        if (!currency) throw new Error('Waffo webhook did not contain a currency.');
         const amount = Number(data.total ?? data.amount);
         const taxAmount = Number(data.taxAmount ?? '0');
-        const decimals = currencyDecimals(data.currency);
+        const decimals = currencyDecimals(currency);
         const shippingCents = Number(metadata.shipping_cents ?? '0');
         if (!Number.isFinite(amount) || amount < 0) throw new Error('Waffo webhook contained an invalid order amount.');
         if (!Number.isFinite(taxAmount) || taxAmount < 0) throw new Error('Waffo webhook contained an invalid tax amount.');
@@ -175,30 +183,32 @@ export function createWaffoProvider(): PaymentProvider {
           }
         }
 
+        const providerSessionId = stringValue(data.orderId) ?? stringValue(data.eventId);
+        if (!providerSessionId) throw new Error('Waffo webhook did not contain an order/session id.');
+        const providerPaymentId = stringValue(data.paymentId) ?? stringValue(data.orderId);
+        const buyerEmail = stringValue(data.buyerEmail);
+        const shippingWeightGrams = metadata.shipping_weight_grams ? Number(metadata.shipping_weight_grams) : null;
+        if (shippingWeightGrams !== null && (!Number.isFinite(shippingWeightGrams) || shippingWeightGrams < 0)) throw new Error('Waffo webhook contained invalid shipping weight metadata.');
+
         const order: PaidOrderInput = {
-          providerSessionId: event.eventId || data.orderId,
+          providerSessionId,
           publicId: reservationId,
           reservationId,
-          email: data.buyerEmail || null,
+          email: buyerEmail,
           amountTotalCents: Math.round(amount * 10 ** decimals),
           shippingCents,
           shippingLabel: metadata.shipping_label ?? null,
-          shippingWeightGrams: metadata.shipping_weight_grams ? Number(metadata.shipping_weight_grams) : null,
-          deliveryMethod:
-            metadata.delivery_method === 'pickup' || metadata.delivery_method === 'shipping'
-              ? metadata.delivery_method
-              : null,
+          shippingWeightGrams,
+          deliveryMethod: metadata.delivery_method === 'pickup' || metadata.delivery_method === 'shipping' ? metadata.delivery_method : null,
           shippingAddress,
           taxCents: Math.round(taxAmount * 10 ** decimals),
-          currency: data.currency,
+          currency,
           paymentMethod: 'waffo',
-          providerPaymentId: data.paymentId ?? data.orderId ?? null,
+          providerPaymentId,
           items: [],
         };
-
         return { type: event.eventType, order };
       }
-
       return { type: event.eventType };
     },
   };
