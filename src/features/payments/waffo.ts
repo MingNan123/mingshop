@@ -110,18 +110,14 @@ export function createWaffoProvider(): PaymentProvider {
       const { productId, taxCategory } = getWaffoConfig();
       const client = createClient();
       const subtotalMinor = params.lineItems.reduce((sum, line) => sum + line.amountCents * line.quantity, 0);
-      const fallbackShipping =
-        params.selectedShipping == null && params.shipping
-          ? params.shipping.options.length === 1
-            ? params.shipping.options[0]
-            : params.shipping.options.length === 0
-              ? null
-              : undefined
-          : null;
-      if (fallbackShipping === undefined) {
-        throw new Error('Waffo checkout requires a single shipping rate. Configure one Waffo-compatible rate or use another payment method.');
-      }
-      const shippingMinor = params.selectedShipping?.amountCents ?? fallbackShipping?.amountCents ?? 0;
+
+      // Waffo checkout does not require an address. A shipping address/rate is
+      // used only when the shopper has explicitly selected one in the app.
+      // Do NOT infer shipping from params.shipping: that list may contain several
+      // rates, and digital/email-delivered products must remain payable without
+      // an address or shipping charge.
+      const selectedShipping = params.selectedShipping ?? null;
+      const shippingMinor = selectedShipping?.amountCents ?? 0;
       const chargeableMinor = subtotalMinor + shippingMinor;
       const currency = params.lineItems[0]?.currency?.toUpperCase();
       if (!currency) throw new Error('Waffo checkout requires at least one line item currency.');
@@ -130,31 +126,15 @@ export function createWaffoProvider(): PaymentProvider {
 
       const metadata: Record<string, string> = { ...(params.metadata ?? {}) };
       const reservationId = metadata.reservation_id;
-      const selectedShipping = params.selectedShipping ??
-        (fallbackShipping
-          ? {
-              label: fallbackShipping.label,
-              amountCents: fallbackShipping.amountCents,
-              weightGrams: params.shipping?.shipmentWeightGrams ?? null,
-              deliveryMethod: fallbackShipping.pickup ? 'pickup' : 'shipping',
-              address: {
-                name: null,
-                line1: null,
-                line2: null,
-                city: null,
-                state: null,
-                postal: null,
-                country: params.shipping?.addressCountries[0] ?? null,
-              },
-              email: null,
-            }
-          : null);
+
       if (selectedShipping) {
         metadata.shipping_cents = String(selectedShipping.amountCents);
         metadata.shipping_label = selectedShipping.label.slice(0, 120);
         metadata.shipping_weight_grams = String(selectedShipping.weightGrams ?? '');
         metadata.delivery_method = selectedShipping.deliveryMethod;
-        if (selectedShipping.address.line1 || selectedShipping.address.country) metadata.shipping_address = JSON.stringify(selectedShipping.address);
+        if (selectedShipping.address.line1 || selectedShipping.address.country) {
+          metadata.shipping_address = JSON.stringify(selectedShipping.address);
+        }
       }
 
       try {
@@ -162,7 +142,7 @@ export function createWaffoProvider(): PaymentProvider {
           productId,
           currency,
           priceSnapshot: { amount: displayAmount(chargeableMinor, currency), taxCategory },
-          buyerEmail: params.selectedShipping?.email ?? undefined,
+          buyerEmail: selectedShipping?.email ?? undefined,
           billingDetail: selectedShipping?.address.country ? billingDetail(selectedShipping.address) : undefined,
           successUrl: params.successUrl,
           metadata,
@@ -177,6 +157,7 @@ export function createWaffoProvider(): PaymentProvider {
           currency,
           amount: displayAmount(chargeableMinor, currency),
           taxCategory,
+          hasShipping: Boolean(selectedShipping),
           error: describeProviderError(error),
         });
         throw new Error('Waffo checkout creation failed. Check Worker logs for the provider error details.');
