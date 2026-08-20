@@ -32,10 +32,10 @@ jobs:
             mcp/package-lock.json
 
       - name: Install storefront dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Install MCP dependencies
-        run: npm ci --prefix mcp
+        run: npm install --prefix mcp --no-audit --no-fund
 
       - name: Create isolated Wrangler configuration
         run: |
@@ -108,7 +108,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install storefront dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Create isolated Wrangler configuration
         run: |
