@@ -6,12 +6,14 @@ import { createStripeProvider } from './stripe';
 import { createLightningProvider } from './lightning-provider';
 import { getLightningBackend } from './lightning';
 import { createOpenNodeProvider } from './opennode';
+import { createWaffoProvider, isWaffoConfigured } from './waffo';
 import { createDemoProvider } from './demo';
 import { getSecret, vaultReady } from '../secrets/store';
 
 export type { PaymentProvider } from './provider';
 export {
   STRIPE_CHECKOUT_TTL_SECONDS,
+  WAFFO_CHECKOUT_TTL_SECONDS,
   OPENNODE_CHECKOUT_TTL_SECONDS,
   RESERVATION_EXPIRY_GRACE_SECONDS,
 } from './provider';
@@ -19,22 +21,20 @@ export { DEMO_CHECKOUT_TTL_SECONDS } from './demo';
 
 // 'demo' is a first-class method — a simulated checkout that's ALWAYS offered
 // (records a real, demo-tagged order). The real rails work only when configured.
-export type PaymentMethod = 'stripe' | 'lightning' | 'opennode' | 'demo';
-const ALL_METHODS: PaymentMethod[] = ['stripe', 'lightning', 'opennode'];
+export type PaymentMethod = 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'demo';
+const ALL_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
 // The buttons always presented at checkout. Each real rail works if configured,
 // else its button leads to setup instructions; demo always works.
-const OFFERED: PaymentMethod[] = ['stripe', 'lightning', 'demo'];
+const OFFERED: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'demo'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
-  return value === 'stripe' || value === 'lightning' || value === 'opennode' || value === 'demo';
+  return value === 'stripe' || value === 'waffo' || value === 'lightning' || value === 'opennode' || value === 'demo';
 }
 
 /**
  * Whether a method can actually process a payment right now. Real rails need their
- * keys (and Lightning its node URL) — all configured in the admin dashboard and
- * read from the runtime settings overlay (`Astro.locals.settings` /
- * getStoreSettings). Sync (no decryption) so it's cheap per render — the actual key
- * is only decrypted in getPaymentProvider. Demo always works.
+ * keys (and Lightning its node URL) — configured through the existing runtime
+ * settings overlay or Waffo's deployment vars. Demo always works.
  */
 export function isMethodAvailable(
   method: PaymentMethod,
@@ -45,6 +45,8 @@ export function isMethodAvailable(
   switch (method) {
     case 'stripe':
       return has('stripe_secret_key') && has('stripe_webhook_secret');
+    case 'waffo':
+      return isWaffoConfigured();
     case 'opennode':
       return has('opennode_api_key');
     case 'lightning':
@@ -75,8 +77,7 @@ export function defaultMethod(settings: StoreSettings): PaymentMethod {
  * Methods a buyer/agent can actually pay with right now — the configured real
  * rails plus demo, minus any the admin has disabled at runtime. Used by the agent
  * checkout + discovery, so callers are never handed a method that isn't wired up
- * (or has been switched off). May be EMPTY (admin disabled everything) — callers
- * hide checkout rather than falling back to a method nobody enabled.
+ * (or has been switched off). May be EMPTY (admin disabled everything).
  */
 export function enabledMethods(
   settings: StoreSettings,
@@ -95,11 +96,9 @@ export function enabledMethods(
 }
 
 /**
- * Methods the checkout UI shows as buttons — Card, Lightning, Demo (plus any
- * other configured rail, e.g. OpenNode), minus any the admin disabled. Unlike
- * enabledMethods, this keeps UNconfigured-but-not-disabled real rails so they can
- * render a "set this up" link. May be EMPTY when the admin disables everything —
- * the cart/product pages then hide checkout entirely.
+ * Methods the checkout UI shows as buttons — Card, Waffo, Lightning, Demo (plus
+ * any other configured rail), minus any the admin disabled. Unlike enabledMethods,
+ * this keeps real rails visible when unconfigured so the UI can render setup links.
  */
 export function offeredMethods(
   settings: StoreSettings,
@@ -109,23 +108,19 @@ export function offeredMethods(
   const extra = ALL_METHODS.filter(
     (m) => !OFFERED.includes(m) && isMethodAvailable(m, settings, vault),
   );
-  return (['stripe', 'lightning', ...extra, 'demo'] as PaymentMethod[]).filter((m) => !off.has(m));
+  return (['stripe', 'waffo', 'lightning', ...extra, 'demo'] as PaymentMethod[]).filter((m) => !off.has(m));
 }
 
-/**
- * Build a concrete payment provider. `method` selects the rail; omitted → the
- * store default. Keys/URLs are resolved from the admin config (D1 settings + the
- * encrypted vault). Real methods fail closed when their secrets cannot be
- * decrypted; only an explicit `demo` selection constructs the simulator. The
- * checkout + webhook + refund routes are the only callers.
- */
+/** Build a concrete payment provider. */
 export async function getPaymentProvider(method?: PaymentMethod): Promise<PaymentProvider> {
   const settings = await getStoreSettings(env.DB);
   const m = method ?? settings.paymentProvider;
   if (m === 'demo') return createDemoProvider(env.DB);
   switch (m) {
+    case 'waffo':
+      if (!isWaffoConfigured()) throw new Error('Waffo is not fully configured.');
+      return createWaffoProvider();
     case 'lightning':
-      // Self-hosted Lightning (phoenixd / LNbits) behind a self-rendered pay page.
       return createLightningProvider(env.DB, await getLightningBackend());
     case 'opennode': {
       const key = await getSecret(env.DB, 'opennode_api_key');
