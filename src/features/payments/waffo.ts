@@ -14,11 +14,6 @@ const nonEmpty = (value: string | undefined | null): string | null => {
   return trimmed ? trimmed : null;
 };
 
-/**
- * Waffo Pancake configuration is deliberately deployment-level. The merchant
- * private key is a Worker secret; product/tax configuration is supplied as vars
- * so the application never creates or publishes products implicitly.
- */
 function getWaffoConfig() {
   const merchantId = nonEmpty(env.WAFFO_MERCHANT_ID);
   const privateKey = nonEmpty(env.WAFFO_PRIVATE_KEY);
@@ -71,16 +66,25 @@ export function createWaffoProvider(): PaymentProvider {
       const { productId, taxCategory } = getWaffoConfig();
       const client = createClient();
 
-      // Pancake's checkout is product-based. Mingshop therefore uses one
-      // merchant-created one-time Waffo product as the payment rail and sends
-      // the authoritative Mingshop subtotal + selected shipping as a
-      // priceSnapshot. Inventory, itemization and the final order record remain
-      // authoritative in D1 and are correlated through reservation_id.
       const subtotalMinor = params.lineItems.reduce(
         (sum, line) => sum + line.amountCents * line.quantity,
         0,
       );
-      const shippingMinor = params.selectedShipping?.amountCents ?? 0;
+      const fallbackShipping =
+        params.selectedShipping == null && params.shipping
+          ? params.shipping.options.length === 1
+            ? params.shipping.options[0]
+            : params.shipping.options.length === 0
+              ? null
+              : undefined
+          : null;
+      if (fallbackShipping === undefined) {
+        throw new Error(
+          'Waffo checkout requires a single shipping rate. Configure one Waffo-compatible rate or use another payment method.',
+        );
+      }
+
+      const shippingMinor = params.selectedShipping?.amountCents ?? fallbackShipping?.amountCents ?? 0;
       const chargeableMinor = subtotalMinor + shippingMinor;
       const currency = params.lineItems[0]?.currency?.toUpperCase();
       if (!currency) throw new Error('Waffo checkout requires at least one line item currency.');
@@ -92,12 +96,35 @@ export function createWaffoProvider(): PaymentProvider {
       const metadata: Record<string, string> = { ...(params.metadata ?? {}) };
       const reservationId = metadata.reservation_id;
       if (reservationId) metadata.reservation_id = reservationId;
-      if (params.selectedShipping) {
-        metadata.shipping_cents = String(params.selectedShipping.amountCents);
-        metadata.shipping_label = params.selectedShipping.label.slice(0, 120);
-        metadata.shipping_weight_grams = String(params.selectedShipping.weightGrams ?? '');
-        metadata.delivery_method = params.selectedShipping.deliveryMethod;
-        metadata.shipping_address = JSON.stringify(params.selectedShipping.address);
+
+      const selectedShipping = params.selectedShipping ??
+        (fallbackShipping
+          ? {
+              label: fallbackShipping.label,
+              amountCents: fallbackShipping.amountCents,
+              weightGrams: params.shipping?.shipmentWeightGrams ?? null,
+              deliveryMethod: fallbackShipping.pickup ? 'pickup' : 'shipping',
+              address: {
+                name: null,
+                line1: null,
+                line2: null,
+                city: null,
+                state: null,
+                postal: null,
+                country: params.shipping?.addressCountries[0] ?? null,
+              },
+              email: null,
+            }
+          : null);
+
+      if (selectedShipping) {
+        metadata.shipping_cents = String(selectedShipping.amountCents);
+        metadata.shipping_label = selectedShipping.label.slice(0, 120);
+        metadata.shipping_weight_grams = String(selectedShipping.weightGrams ?? '');
+        metadata.delivery_method = selectedShipping.deliveryMethod;
+        if (selectedShipping.address.line1 || selectedShipping.address.country) {
+          metadata.shipping_address = JSON.stringify(selectedShipping.address);
+        }
       }
 
       const session = await client.checkout.createSession({
@@ -108,8 +135,8 @@ export function createWaffoProvider(): PaymentProvider {
           taxCategory,
         },
         buyerEmail: params.selectedShipping?.email ?? undefined,
-        billingDetail: params.selectedShipping
-          ? billingDetail(params.selectedShipping.address)
+        billingDetail: selectedShipping?.address.country
+          ? billingDetail(selectedShipping.address)
           : undefined,
         successUrl: params.successUrl,
         metadata,
@@ -117,9 +144,7 @@ export function createWaffoProvider(): PaymentProvider {
         expiresInSeconds: 45 * 60,
       });
 
-      return {
-        url: session.checkoutUrl,
-      };
+      return { url: session.checkoutUrl };
     },
 
     async verifyWebhook(payload: string, headers: Headers): Promise<WebhookResult> {
@@ -136,15 +161,9 @@ export function createWaffoProvider(): PaymentProvider {
         const taxAmount = Number(data.taxAmount ?? '0');
         const decimals = currencyDecimals(data.currency);
         const shippingCents = Number(metadata.shipping_cents ?? '0');
-        if (!Number.isFinite(amount) || amount < 0) {
-          throw new Error('Waffo webhook contained an invalid order amount.');
-        }
-        if (!Number.isFinite(taxAmount) || taxAmount < 0) {
-          throw new Error('Waffo webhook contained an invalid tax amount.');
-        }
-        if (!Number.isInteger(shippingCents) || shippingCents < 0) {
-          throw new Error('Waffo webhook contained invalid shipping metadata.');
-        }
+        if (!Number.isFinite(amount) || amount < 0) throw new Error('Waffo webhook contained an invalid order amount.');
+        if (!Number.isFinite(taxAmount) || taxAmount < 0) throw new Error('Waffo webhook contained an invalid tax amount.');
+        if (!Number.isInteger(shippingCents) || shippingCents < 0) throw new Error('Waffo webhook contained invalid shipping metadata.');
 
         let shippingAddress: ShippingAddress | null = null;
         if (metadata.shipping_address) {
@@ -164,9 +183,7 @@ export function createWaffoProvider(): PaymentProvider {
           amountTotalCents: Math.round(amount * 10 ** decimals),
           shippingCents,
           shippingLabel: metadata.shipping_label ?? null,
-          shippingWeightGrams: metadata.shipping_weight_grams
-            ? Number(metadata.shipping_weight_grams)
-            : null,
+          shippingWeightGrams: metadata.shipping_weight_grams ? Number(metadata.shipping_weight_grams) : null,
           deliveryMethod:
             metadata.delivery_method === 'pickup' || metadata.delivery_method === 'shipping'
               ? metadata.delivery_method
@@ -179,15 +196,9 @@ export function createWaffoProvider(): PaymentProvider {
           items: [],
         };
 
-        return {
-          type: event.eventType,
-          order,
-        };
+        return { type: event.eventType, order };
       }
 
-      // Other Waffo events are intentionally ignored by the generic one-time
-      // order pipeline. Subscriptions can be added later without changing the
-      // one-time checkout settlement contract.
       return { type: event.eventType };
     },
   };
