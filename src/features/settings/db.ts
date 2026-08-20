@@ -83,7 +83,6 @@ export interface StoreSettings {
   weightUnit: WeightUnit;
   turnstileEnabled: boolean;
   turnstileSiteKey: string | null;
-  /** Default payment rail (Settings → Payments). Default 'stripe'. */
   paymentProvider: 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'demo';
   lightningBackend: 'phoenixd' | 'lnbits';
   lnbitsUrl: string | null;
@@ -99,23 +98,35 @@ export async function getSetting(db: D1Database, key: SettingKey): Promise<strin
   return row?.value ?? null;
 }
 
-export async function setSetting(db: D1Database, key: SettingKey, value: string | null): Promise<void> {
+/** Upsert a setting (empty/undefined value deletes it → falls back to the default). */
+export async function setSetting(
+  db: D1Database,
+  key: SettingKey,
+  value: string | null | undefined,
+): Promise<void> {
   if (value == null || value === '') {
     await db.prepare('DELETE FROM settings WHERE key = ?').bind(key).run();
     return;
   }
   await db
     .prepare(
-      `INSERT INTO settings (key, value)
-       VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      `INSERT INTO settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
     )
     .bind(key, value)
     .run();
 }
 
+export const STORE_SETTINGS_SQL = 'SELECT key, value FROM settings';
+
 export async function getStoreSettings(db: D1Database): Promise<StoreSettings> {
-  const { results } = await db.prepare('SELECT key, value FROM settings').all<{ key: string; value: string }>();
+  const { results } = await db.prepare(STORE_SETTINGS_SQL).all<{ key: string; value: string }>();
+  return parseStoreSettings(results ?? []);
+}
+
+export function parseStoreSettings(
+  results: Array<{ key: string; value: string }>,
+): StoreSettings {
   const map = new Map((results ?? []).map((r) => [r.key, r.value]));
   return {
     setupComplete: map.get('setup_complete') === '1',
