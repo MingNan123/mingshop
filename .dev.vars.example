@@ -10,8 +10,8 @@ AUTH_SECRET=
 WAFFO_MERCHANT_ID=
 # RSA private key. Keep this out of git; use a Worker secret in production.
 WAFFO_PRIVATE_KEY=
-# Existing one-time product ID from the Waffo Dashboard. Do not guess this value.
-WAFFO_PRODUCT_ID=
+# Existing one-time product ID from the Waffo Dashboard.
+WAFFO_PRODUCT_ID=PROD_3bmPExtmoJjCk8GIl12Rai
 # Must match the tax category configured for the Waffo product.
 # Supported by the current Pancake SDK: digital_goods, saas, software, ebook,
 # online_course, consulting, professional_service.
