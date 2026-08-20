@@ -277,13 +277,17 @@ export async function expireSelfRenderedReservation(
  * Atomically claim all requested stock. The reservation row is inserted only if
  * every aggregated stock target is available; decrements are conditional on that
  * row, so a failed multi-line reservation cannot partially consume inventory.
+ *
+ * Payment method is intentionally a string at this persistence boundary so newly
+ * added hosted payment rails (such as Waffo) can be recorded without requiring
+ * the reservation module to import the payment-provider registry.
  */
 export async function reserveInventory(
   db: D1Database,
   publicId: string,
   items: ReservationItem[],
   ttlSeconds: number,
-  paymentMethod: 'stripe' | 'opennode' | 'lightning' | 'demo',
+  paymentMethod: string,
   purger?: StockTransitionPurger,
   release: DigitalDeliveryRelease = DIGITAL_DELIVERY_RELEASE,
 ): Promise<boolean> {
@@ -312,7 +316,6 @@ export async function reserveInventory(
       publicId: item.publicId ?? (lifecycleActive(release) ? generatePublicId('orderItem') : undefined),
     }));
 
-    // Transitional guard while historical order-item IDs are being registered.
     if (
       lifecycleActive(release) &&
       (await hasClaimedItemId(db, claimedItems.map((item) => item.publicId!)))
@@ -330,9 +333,6 @@ export async function reserveInventory(
          RETURNING public_id`,
       )
       .bind(publicId, JSON.stringify(claimedItems), paymentMethod, `+${ttlSeconds} seconds`, ...checkValues);
-    // Release 1 writes no claims, so the decrement results sit at a different
-    // offset there. Index off the statements actually batched, never off the
-    // item count — getting this wrong silently skips every stock purge.
     const claims = lifecycleActive(release) ? claimedItems.map((item) =>
       db
         .prepare(
