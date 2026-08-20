@@ -21,7 +21,7 @@ const nonEmpty = (value: string | undefined | null): string | null => {
 };
 
 function getTaxCategory(value: string): TaxCategory {
-  if ((TAX_CATEGORIES as readonly string[]).includes(value)) return value as TaxCategory;
+  if ((TAX_CATEGORIES as readonly string[]).includes(value)) return value as unknown as TaxCategory;
   throw new Error(`Unsupported Waffo tax category: ${value}`);
 }
 
