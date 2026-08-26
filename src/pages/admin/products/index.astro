@@ -26,13 +26,28 @@ const filterQuery = productFilterParams(filters);
 const hrefFor = (p: number) => queryHref('/admin/products', { ...filterQuery, sort, dir, page: p > 1 ? p : undefined });
 const sortHref = (col: string) => queryHref('/admin/products', { ...filterQuery, sort: col, dir: sort === col && dir === 'asc' ? 'desc' : 'asc' });
 const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓') : '');
+const deleted = Number.parseInt(Astro.url.searchParams.get('deleted') ?? '0', 10);
+const errorMessage = Astro.url.searchParams.get('error');
+const warningMessage = Astro.url.searchParams.get('warning');
 ---
 
 <AdminLayout title="商品" active="products">
-  <div class="mb-8 flex items-center justify-between">
-    <h1 class="font-serif text-3xl tracking-tight">商品</h1>
-    <a href="/admin/products/new" class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">新建商品</a>
+  <div class="mb-8 flex items-center justify-between gap-4">
+    <div>
+      <h1 class="font-serif text-3xl tracking-tight">商品</h1>
+      <p class="mt-2 text-sm text-gray-500">选择商品后可以批量删除。每次最多删除 30 个商品。</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="bulk-delete-button" type="submit" form="bulk-delete-form" disabled class="rounded-md border border-red-200 px-4 py-2 text-xs font-medium uppercase tracking-wider text-red-600 opacity-40 hover:bg-red-50 disabled:cursor-not-allowed">
+        批量删除 <span id="selected-count">0</span> 个
+      </button>
+      <a href="/admin/products/new" class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">新建商品</a>
+    </div>
   </div>
+
+  {deleted > 0 && <div class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">已成功删除 {deleted} 个商品，并清理相关分类、图片关联、搜索索引和商城缓存。</div>}
+  {errorMessage && <div class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>}
+  {warningMessage && <div class="mb-6 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{warningMessage}</div>}
 
   <FilterBar
     action="/admin/products"
@@ -47,9 +62,15 @@ const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓')
     ]}
   />
 
+  <form id="bulk-delete-form" method="POST" action="/api/admin/products/bulk-delete" onsubmit="return confirmBulkDelete()"></form>
+
   <div class="sm:overflow-x-auto">
-    <table class="admin-table w-full text-left text-sm sm:min-w-[42rem]">
+    <table class="admin-table w-full text-left text-sm sm:min-w-[48rem]">
       <thead><tr class="border-b border-line text-xs uppercase tracking-widest text-gray-400">
+        <th class="w-12 py-3 pr-2 font-normal">
+          <label class="sr-only" for="select-all-products">全选商品</label>
+          <input id="select-all-products" type="checkbox" class="product-select h-4 w-4 rounded border-line align-middle" aria-label="全选商品" />
+        </th>
         <th class="py-3 pr-4 font-normal"><a href={sortHref('name')} class="hover:text-brand">商品{arrow('name')}</a></th>
         <th class="py-3 pr-4 font-normal"><a href={sortHref('price')} class="hover:text-brand">价格{arrow('price')}</a></th>
         <th class="py-3 pr-4 font-normal"><a href={sortHref('stock')} class="hover:text-brand">库存{arrow('stock')}</a></th>
@@ -60,6 +81,10 @@ const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓')
       <tbody>
         {products.map((p) => (
           <tr class="border-b border-line">
+            <td class="py-3 pr-2 align-middle">
+              <label class="sr-only" for={`select-product-${p.public_id}`}>选择 {p.name}</label>
+              <input id={`select-product-${p.public_id}`} form="bulk-delete-form" type="checkbox" name="ids" value={p.public_id ?? ''} class="product-select h-4 w-4 rounded border-line align-middle" aria-label={`选择 ${p.name}`} />
+            </td>
             <td class="py-3 pr-4"><a href={`/admin/products/${p.public_id}/edit`} class="flex items-center gap-3 hover:text-brand"><ProductImage imageKey={p.image_key} alt="" usage="thumbnail" class="h-10 w-10 rounded object-cover" /><span class="font-medium">{p.name}</span></a></td>
             <td data-label="价格" class="py-3 pr-4 tabular-nums">{formatPrice(p.price_cents)}</td>
             <td data-label="库存" class="py-3 pr-4 tabular-nums">{p.stock}</td>
@@ -75,9 +100,46 @@ const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓')
             </div></td>
           </tr>
         ))}
-        {products.length === 0 && <tr><td colspan="6" class="py-8 text-center text-gray-400">{filtered ? '没有符合筛选条件的商品。' : '暂无商品。'}</td></tr>}
+        {products.length === 0 && <tr><td colspan="7" class="py-8 text-center text-gray-400">{filtered ? '没有符合筛选条件的商品。' : '暂无商品。'}</td></tr>}
       </tbody>
     </table>
   </div>
   <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
+
+  <script is:inline>
+    const productCheckboxes = () => Array.from(document.querySelectorAll('input[name="ids"]'));
+    const updateBulkDeleteState = () => {
+      const selected = productCheckboxes().filter((input) => input.checked).length;
+      const button = document.getElementById('bulk-delete-button');
+      const count = document.getElementById('selected-count');
+      if (count) count.textContent = String(selected);
+      if (button) {
+        button.disabled = selected === 0;
+        button.classList.toggle('opacity-40', selected === 0);
+        button.classList.toggle('opacity-100', selected > 0);
+      }
+      const selectAll = document.getElementById('select-all-products');
+      if (selectAll) selectAll.checked = selected > 0 && selected === productCheckboxes().length;
+    };
+    const confirmBulkDelete = () => {
+      const selected = productCheckboxes().filter((input) => input.checked);
+      if (!selected.length) return false;
+      if (selected.length > 30) {
+        alert('一次最多删除 30 个商品，请分批操作。');
+        return false;
+      }
+      const names = selected.slice(0, 5).map((input) => input.getAttribute('aria-label')?.replace(/^选择 /, '') || '商品');
+      const preview = names.join('、') + (selected.length > 5 ? ` 等 ${selected.length} 个商品` : '');
+      return confirm(`确定要删除 ${preview} 吗？\n\n删除后会同时清理商品分类关联、商品图片关联、搜索索引和商城缓存，此操作无法撤销。`);
+    };
+    document.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      if (target.id === 'select-all-products') {
+        productCheckboxes().forEach((input) => { input.checked = target.checked; });
+      }
+      if (target.name === 'ids' || target.id === 'select-all-products') updateBulkDeleteState();
+    });
+    updateBulkDeleteState();
+  </script>
 </AdminLayout>
