@@ -48,3 +48,15 @@ export async function createProduct(db: D1Database, p: ProductInput): Promise<nu
 export async function updateProduct(db: D1Database, id: number, p: ProductInput): Promise<void> { await db.prepare(`UPDATE products SET name = ?, slug = ?, description = ?, price_cents = ?, currency = ?, image_key = ?, stock = ?, active = ?, weight_grams = ?, requires_shipping = ? WHERE id = ?`).bind(p.name, p.slug, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, id).run(); }
 export async function setProductFile(db: D1Database, id: number, file: { key: string; name: string; mime: string; size: number } | null): Promise<void> { await db.prepare(`UPDATE products SET file_key = ?, file_name = ?, file_mime = ?, file_size_bytes = ? WHERE id = ?`).bind(file?.key ?? null, file?.name ?? null, file?.mime ?? null, file?.size ?? null, id).run(); }
 export async function deleteProduct(db: D1Database, id: number): Promise<void> { await db.batch([db.prepare('DELETE FROM product_categories WHERE product_id = ?').bind(id), db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(id), db.prepare('DELETE FROM products WHERE id = ?').bind(id)]); }
+
+export async function deleteProducts(db: D1Database, ids: number[]): Promise<void> {
+  const uniqueIds = [...new Set(ids)].filter((id) => Number.isInteger(id) && id > 0);
+  if (!uniqueIds.length) return;
+  const statements: D1PreparedStatement[] = [];
+  for (const id of uniqueIds) {
+    statements.push(db.prepare('DELETE FROM product_categories WHERE product_id = ?').bind(id));
+    statements.push(db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(id));
+    statements.push(db.prepare('DELETE FROM products WHERE id = ?').bind(id));
+  }
+  await db.batch(statements);
+}
