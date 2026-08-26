@@ -29,48 +29,46 @@ const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓')
 const deleted = Number.parseInt(Astro.url.searchParams.get('deleted') ?? '0', 10);
 const errorMessage = Astro.url.searchParams.get('error');
 const warningMessage = Astro.url.searchParams.get('warning');
+const message = Astro.url.searchParams.get('message');
+const stats = products.reduce((acc, p) => ({ ...acc, active: acc.active + (p.active ? 1 : 0), out: acc.out + (p.stock <= 0 ? 1 : 0), low: acc.low + (p.stock > 0 && p.stock <= 5 ? 1 : 0) }), { active: 0, out: 0, low: 0 });
+const returnTo = Astro.url.pathname + Astro.url.search;
 ---
 
 <AdminLayout title="商品" active="products">
-  <div class="mb-8 flex items-center justify-between gap-4">
+  <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="font-serif text-3xl tracking-tight">商品</h1>
-      <p class="mt-2 text-sm text-gray-500">选择商品后可以批量删除。每次最多删除 30 个商品。</p>
+      <p class="mt-2 text-sm text-gray-500">管理商品、库存和上架状态。批量操作最多 100 个商品。</p>
     </div>
-    <div class="flex items-center gap-3">
-      <button id="bulk-delete-button" type="submit" form="bulk-delete-form" disabled class="rounded-md border border-red-200 px-4 py-2 text-xs font-medium uppercase tracking-wider text-red-600 opacity-40 hover:bg-red-50 disabled:cursor-not-allowed">
-        批量删除 <span id="selected-count">0</span> 个
-      </button>
+    <div class="flex flex-wrap items-center gap-3">
+      <button id="bulk-activate-button" type="submit" form="bulk-status-form" name="_action" value="activate" disabled class="rounded-md border border-green-200 px-4 py-2 text-xs font-medium uppercase tracking-wider text-green-700 opacity-40 disabled:cursor-not-allowed">批量上架</button>
+      <button id="bulk-deactivate-button" type="submit" form="bulk-status-form" name="_action" value="deactivate" disabled class="rounded-md border border-yellow-200 px-4 py-2 text-xs font-medium uppercase tracking-wider text-yellow-700 opacity-40 disabled:cursor-not-allowed">批量下架</button>
+      <button id="bulk-delete-button" type="submit" form="bulk-delete-form" disabled class="rounded-md border border-red-200 px-4 py-2 text-xs font-medium uppercase tracking-wider text-red-600 opacity-40 disabled:cursor-not-allowed">批量删除 <span id="selected-count">0</span> 个</button>
       <a href="/admin/products/new" class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">新建商品</a>
     </div>
   </div>
 
+  <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-md border border-line bg-white p-4"><div class="text-xs text-gray-400">当前筛选结果</div><div class="mt-1 text-2xl font-semibold">{matchCount}</div></div>
+    <div class="rounded-md border border-line bg-white p-4"><div class="text-xs text-gray-400">本页已上架</div><div class="mt-1 text-2xl font-semibold text-green-700">{stats.active}</div></div>
+    <div class="rounded-md border border-line bg-white p-4"><div class="text-xs text-gray-400">本页库存预警 ≤ 5</div><div class="mt-1 text-2xl font-semibold text-yellow-700">{stats.low}</div></div>
+    <div class="rounded-md border border-line bg-white p-4"><div class="text-xs text-gray-400">本页已售罄</div><div class="mt-1 text-2xl font-semibold text-red-600">{stats.out}</div></div>
+  </div>
+
   {deleted > 0 && <div class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">已成功删除 {deleted} 个商品，并清理相关分类、图片关联、搜索索引和商城缓存。</div>}
+  {message && <div class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{message}</div>}
   {errorMessage && <div class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>}
   {warningMessage && <div class="mb-6 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{warningMessage}</div>}
 
-  <FilterBar
-    action="/admin/products"
-    active={filtered}
-    count={matchCount}
-    noun="商品"
-    hidden={{ sort: sort ?? undefined, dir: dir ?? undefined }}
-    search={{ name: 'q', value: filters.q, placeholder: '商品名称' }}
-    selects={[
-      { name: 'status', label: '显示状态', anyLabel: '全部商品', value: filters.status, options: PRODUCT_STATUS_OPTIONS },
-      { name: 'stock', label: '库存', anyLabel: '全部库存', value: filters.stock, options: PRODUCT_STOCK_OPTIONS },
-    ]}
-  />
+  <FilterBar action="/admin/products" active={filtered} count={matchCount} noun="商品" hidden={{ sort: sort ?? undefined, dir: dir ?? undefined }} search={{ name: 'q', value: filters.q, placeholder: '商品名称' }} selects={[{ name: 'status', label: '显示状态', anyLabel: '全部商品', value: filters.status, options: PRODUCT_STATUS_OPTIONS }, { name: 'stock', label: '库存', anyLabel: '全部库存', value: filters.stock, options: PRODUCT_STOCK_OPTIONS }]} />
 
   <form id="bulk-delete-form" method="POST" action="/api/admin/products/bulk-delete" onsubmit="return confirmBulkDelete()"></form>
+  <form id="bulk-status-form" method="POST" action="/api/admin/products/bulk-status" onsubmit="return confirmBulkStatus()"><input type="hidden" name="return_to" value={returnTo} /></form>
 
   <div class="sm:overflow-x-auto">
     <table class="admin-table w-full text-left text-sm sm:min-w-[48rem]">
       <thead><tr class="border-b border-line text-xs uppercase tracking-widest text-gray-400">
-        <th class="w-12 py-3 pr-2 font-normal">
-          <label class="sr-only" for="select-all-products">全选商品</label>
-          <input id="select-all-products" type="checkbox" class="product-select h-4 w-4 rounded border-line align-middle" aria-label="全选商品" />
-        </th>
+        <th class="w-12 py-3 pr-2 font-normal"><input id="select-all-products" type="checkbox" class="product-select h-4 w-4 rounded border-line" aria-label="全选商品" /></th>
         <th class="py-3 pr-4 font-normal"><a href={sortHref('name')} class="hover:text-brand">商品{arrow('name')}</a></th>
         <th class="py-3 pr-4 font-normal"><a href={sortHref('price')} class="hover:text-brand">价格{arrow('price')}</a></th>
         <th class="py-3 pr-4 font-normal"><a href={sortHref('stock')} class="hover:text-brand">库存{arrow('stock')}</a></th>
@@ -81,23 +79,13 @@ const warningMessage = Astro.url.searchParams.get('warning');
       <tbody>
         {products.map((p) => (
           <tr class="border-b border-line">
-            <td class="py-3 pr-2 align-middle">
-              <label class="sr-only" for={`select-product-${p.public_id}`}>选择 {p.name}</label>
-              <input id={`select-product-${p.public_id}`} form="bulk-delete-form" type="checkbox" name="ids" value={p.public_id ?? ''} class="product-select h-4 w-4 rounded border-line align-middle" aria-label={`选择 ${p.name}`} />
-            </td>
+            <td class="py-3 pr-2 align-middle"><input form="bulk-delete-form" type="checkbox" name="ids" value={p.public_id ?? ''} class="product-select h-4 w-4 rounded border-line" aria-label={`选择 ${p.name}`} /><input form="bulk-status-form" type="hidden" name="ids" value={p.public_id ?? ''} disabled data-status-id /></td>
             <td class="py-3 pr-4"><a href={`/admin/products/${p.public_id}/edit`} class="flex items-center gap-3 hover:text-brand"><ProductImage imageKey={p.image_key} alt="" usage="thumbnail" class="h-10 w-10 rounded object-cover" /><span class="font-medium">{p.name}</span></a></td>
             <td data-label="价格" class="py-3 pr-4 tabular-nums">{formatPrice(p.price_cents)}</td>
-            <td data-label="库存" class="py-3 pr-4 tabular-nums">{p.stock}</td>
+            <td data-label="库存" class:list={['py-3 pr-4 tabular-nums', p.stock <= 0 ? 'font-semibold text-red-600' : p.stock <= 5 ? 'font-semibold text-yellow-700' : '']}>{p.stock <= 0 ? '已售罄' : p.stock}</td>
             <td data-label="销量" class="py-3 pr-4 tabular-nums">{p.sold > 0 ? p.sold : <span class="text-gray-300">0</span>}</td>
-            <td data-label="状态" class="py-3 pr-4">{p.active ? '已启用' : <span class="text-gray-400">未启用</span>}</td>
-            <td data-label="操作" class="py-3 text-right"><div class="flex justify-end gap-4 text-xs uppercase tracking-widest">
-              <a href={`/products/${p.slug}`} target="_blank" rel="noopener" class="text-gray-500 hover:text-brand">查看 ↗</a>
-              <a href={`/admin/products/${p.public_id}/edit`} class="text-accent hover:underline">编辑</a>
-              <form method="POST" action={`/api/admin/products/${p.public_id}`} onsubmit={`return confirm('${menuRefs.has(p.id) ? '该商品已关联到商城导航。删除后该导航链接将在商城中隐藏。确定继续吗？' : '确定删除该商品吗？'}')`}>
-                <input type="hidden" name="_action" value="delete" />
-                <button type="submit" class="text-red-600 hover:underline">删除</button>
-              </form>
-            </div></td>
+            <td data-label="状态" class="py-3 pr-4">{p.active ? <span class="font-medium text-green-700">已上架</span> : <span class="text-gray-400">未上架</span>}</td>
+            <td data-label="操作" class="py-3 text-right"><div class="flex justify-end gap-4 text-xs uppercase tracking-widest"><a href={`/products/${p.slug}`} target="_blank" rel="noopener" class="text-gray-500 hover:text-brand">查看 ↗</a><a href={`/admin/products/${p.public_id}/edit`} class="text-accent hover:underline">编辑</a><form method="POST" action={`/api/admin/products/${p.public_id}`} onsubmit={`return confirm('${menuRefs.has(p.id) ? '该商品已关联到商城导航。删除后该导航链接将在商城中隐藏。确定继续吗？' : '确定删除该商品吗？'}')`}><input type="hidden" name="_action" value="delete" /><button type="submit" class="text-red-600 hover:underline">删除</button></form></div></td>
           </tr>
         ))}
         {products.length === 0 && <tr><td colspan="7" class="py-8 text-center text-gray-400">{filtered ? '没有符合筛选条件的商品。' : '暂无商品。'}</td></tr>}
@@ -107,39 +95,18 @@ const warningMessage = Astro.url.searchParams.get('warning');
   <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
 
   <script is:inline>
-    const productCheckboxes = () => Array.from(document.querySelectorAll('input[name="ids"]'));
-    const updateBulkDeleteState = () => {
-      const selected = productCheckboxes().filter((input) => input.checked).length;
-      const button = document.getElementById('bulk-delete-button');
-      const count = document.getElementById('selected-count');
-      if (count) count.textContent = String(selected);
-      if (button) {
-        button.disabled = selected === 0;
-        button.classList.toggle('opacity-40', selected === 0);
-        button.classList.toggle('opacity-100', selected > 0);
-      }
-      const selectAll = document.getElementById('select-all-products');
-      if (selectAll) selectAll.checked = selected > 0 && selected === productCheckboxes().length;
+    const boxes = () => Array.from(document.querySelectorAll('input[type="checkbox"][name="ids"]'));
+    const updateState = () => {
+      const selected = boxes().filter((x) => x.checked).length;
+      document.getElementById('selected-count').textContent = String(selected);
+      ['bulk-delete-button','bulk-activate-button','bulk-deactivate-button'].forEach((id) => { const b = document.getElementById(id); b.disabled = selected === 0; b.classList.toggle('opacity-40', selected === 0); });
+      document.querySelectorAll('[data-status-id]').forEach((x) => { x.disabled = true; });
+      boxes().forEach((box) => { const row = box.closest('td'); const status = row?.querySelector('[data-status-id]'); if (status) status.disabled = !box.checked; });
+      const all = document.getElementById('select-all-products'); if (all) all.checked = selected > 0 && selected === boxes().length;
     };
-    const confirmBulkDelete = () => {
-      const selected = productCheckboxes().filter((input) => input.checked);
-      if (!selected.length) return false;
-      if (selected.length > 30) {
-        alert('一次最多删除 30 个商品，请分批操作。');
-        return false;
-      }
-      const names = selected.slice(0, 5).map((input) => input.getAttribute('aria-label')?.replace(/^选择 /, '') || '商品');
-      const preview = names.join('、') + (selected.length > 5 ? ` 等 ${selected.length} 个商品` : '');
-      return confirm(`确定要删除 ${preview} 吗？\n\n删除后会同时清理商品分类关联、商品图片关联、搜索索引和商城缓存，此操作无法撤销。`);
-    };
-    document.addEventListener('change', (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement)) return;
-      if (target.id === 'select-all-products') {
-        productCheckboxes().forEach((input) => { input.checked = target.checked; });
-      }
-      if (target.name === 'ids' || target.id === 'select-all-products') updateBulkDeleteState();
-    });
-    updateBulkDeleteState();
+    const confirmBulkDelete = () => confirm(`确定删除 ${boxes().filter((x) => x.checked).length} 个商品吗？此操作无法撤销。`);
+    const confirmBulkStatus = () => { const action = document.activeElement?.value === 'deactivate' ? '下架' : '上架'; return confirm(`确定${action}已选择的商品吗？`); };
+    document.addEventListener('change', (e) => { const t = e.target; if (!(t instanceof HTMLInputElement)) return; if (t.id === 'select-all-products') boxes().forEach((x) => x.checked = t.checked); if (t.name === 'ids' || t.id === 'select-all-products') updateState(); });
+    updateState();
   </script>
 </AdminLayout>
