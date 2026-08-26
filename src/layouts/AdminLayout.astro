@@ -59,6 +59,15 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? '菜单';
         <div class="mt-4 flex gap-4 text-xs uppercase tracking-widest text-gray-400 sm:mt-8 sm:flex-col sm:gap-2"><a href="/" class="hover:text-brand">&larr; 查看商城</a>{showLogout && <a href="/admin/logout" class="hover:text-brand">退出登录</a>}</div>
       </aside>
       <main class="min-w-0 flex-1">
+        <div class="mb-6 flex justify-end">
+          <button type="button" data-page-refresh class="inline-flex items-center gap-2 rounded-md border border-line bg-white/60 px-3 py-2 text-xs uppercase tracking-widest text-gray-500 transition hover:border-brand hover:text-brand" title="刷新页面" aria-label="刷新页面">
+            <svg class="size-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <path d="M16 10a6 6 0 1 1-1.76-4.24" stroke-linecap="round" />
+              <path d="M16 4v4h-4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            刷新
+          </button>
+        </div>
         {showSetupNudge && <a href="/admin/setup" class="mb-6 flex items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand/5 px-4 py-3 text-sm text-gray-700 transition hover:border-brand"><span><strong class="font-semibold">完成商城设置</strong> — 设置商城名称、支付状态及其他配置。</span><span aria-hidden="true" class="text-brand">&rarr;</span></a>}
         {Astro.locals.settings && paymentsInDemoMode(Astro.locals.settings) && <div class="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800"><strong class="font-semibold">尚未配置真实支付方式。</strong> 当前只能使用<strong>演示结账</strong>收取订单；订单会被记录并标记为 <code class="rounded bg-amber-100 px-1 text-xs">demo</code>。</div>}
         {shippingIssue && <a href="/admin/shipping" class="mb-6 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 transition hover:border-red-500"><span><strong class="font-semibold">配送结账因配置无效而被阻止：</strong>{' '}{shippingIssue.reason}</span><span aria-hidden="true">&rarr;</span></a>}
@@ -68,6 +77,9 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? '菜单';
     </div>
     <script>
       (() => {
+        document.querySelector('[data-page-refresh]')?.addEventListener('click', () => {
+          window.location.reload();
+        });
         const t: Record<string, string> = {
           Dashboard:'仪表盘', Products:'商品', Product:'商品', Orders:'订单', Order:'订单', Customers:'客户', Categories:'分类', Pages:'页面', Navigation:'导航', Shipping:'配送', Media:'媒体库', Settings:'设置',
           Save:'保存', Cancel:'取消', Delete:'删除', Edit:'编辑', Create:'创建', Update:'更新', Add:'添加', Remove:'删除', Search:'搜索', Filter:'筛选', Reset:'重置', Close:'关闭', Back:'返回', Next:'下一步', Previous:'上一步', Submit:'提交', Confirm:'确认', Loading:'加载中',
