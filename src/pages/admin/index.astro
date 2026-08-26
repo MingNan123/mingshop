@@ -8,8 +8,6 @@ import { countCustomers } from '../../features/customers/db';
 import { orderReference } from '../../features/orders/number';
 import RevenueChart from '../../components/RevenueChart.astro';
 
-// First-run onboarding: bounce to the setup wizard until it's been completed.
-// (settings is populated by middleware; absent/incomplete → wizard.)
 if (!Astro.locals.settings?.setupComplete) return Astro.redirect('/admin/setup', 302);
 
 const stats = await orderStats(env.DB);
@@ -22,29 +20,27 @@ const onCfg = getConfig().orderNumber;
 
 const cards = [
   {
-    label: 'Net revenue',
+    label: '净营业额',
     value: formatPrice(stats.revenue_cents),
-    sub: stats.refunded_cents > 0 ? `${formatPrice(stats.refunded_cents)} refunded` : null,
+    sub: stats.refunded_cents > 0 ? `${formatPrice(stats.refunded_cents)} 已退款` : null,
   },
-  { label: 'Orders', value: String(stats.count), sub: null },
-  { label: 'Products', value: String(productCount), sub: null },
-  { label: 'Customers', value: String(customerCount), sub: null },
+  { label: '订单', value: String(stats.count), sub: null },
+  { label: '商品', value: String(productCount), sub: null },
+  { label: '客户', value: String(customerCount), sub: null },
 ];
 ---
 
-<AdminLayout title="Dashboard" active="dashboard">
-  <h1 class="mb-8 font-serif text-3xl tracking-tight">Dashboard</h1>
+<AdminLayout title="仪表盘" active="dashboard">
+  <h1 class="mb-8 font-serif text-3xl tracking-tight">仪表盘</h1>
 
   <div class="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
-    {
-      cards.map((c) => (
-        <div class="rounded-lg border border-line p-5">
-          <p class="text-xs uppercase tracking-widest text-gray-400">{c.label}</p>
-          <p class="mt-2 font-serif text-2xl tabular-nums">{c.value}</p>
-          {c.sub && <p class="mt-1 text-xs tabular-nums text-gray-400">{c.sub}</p>}
-        </div>
-      ))
-    }
+    {cards.map((c) => (
+      <div class="rounded-lg border border-line p-5">
+        <p class="text-xs uppercase tracking-widest text-gray-400">{c.label}</p>
+        <p class="mt-2 font-serif text-2xl tabular-nums">{c.value}</p>
+        {c.sub && <p class="mt-1 text-xs tabular-nums text-gray-400">{c.sub}</p>}
+      </div>
+    ))}
   </div>
 
   <div class="mb-12 rounded-lg border border-line p-5">
@@ -54,77 +50,37 @@ const cards = [
   <div class="grid gap-12 lg:grid-cols-2">
     <section>
       <div class="mb-3 flex items-baseline justify-between">
-        <h2 class="text-xs uppercase tracking-widest text-gray-400">Recent orders</h2>
-        <a href="/admin/orders" class="text-xs uppercase tracking-widest text-accent hover:underline">
-          View all
-        </a>
+        <h2 class="text-xs uppercase tracking-widest text-gray-400">最近订单</h2>
+        <a href="/admin/orders" class="text-xs uppercase tracking-widest text-accent hover:underline">查看全部</a>
       </div>
       <table class="w-full text-left text-sm">
         <tbody>
-          {
-            recent.map((o) => (
-              <tr class="border-b border-line">
-                <td class="py-2 pr-4">
-                  <a
-                    href={`/admin/orders/${o.public_id}`}
-                    class="text-accent tabular-nums hover:underline"
-                  >
-                    #{orderReference(o.public_id, o.id, onCfg)}
-                  </a>
-                </td>
-                <td class="py-2 pr-4 text-gray-500">{o.email ?? '—'}</td>
-                <td class="py-2 text-right tabular-nums">
-                  {formatPrice(o.amount_total_cents, o.currency)}
-                </td>
-              </tr>
-            ))
-          }
-          {
-            recent.length === 0 && (
-              <tr>
-                <td class="py-6 text-center text-gray-400">No orders yet.</td>
-              </tr>
-            )
-          }
+          {recent.map((o) => (
+            <tr class="border-b border-line">
+              <td class="py-2 pr-4"><a href={`/admin/orders/${o.public_id}`} class="text-accent tabular-nums hover:underline">#{orderReference(o.public_id, o.id, onCfg)}</a></td>
+              <td class="py-2 pr-4 text-gray-500">{o.email ?? '—'}</td>
+              <td class="py-2 text-right tabular-nums">{formatPrice(o.amount_total_cents, o.currency)}</td>
+            </tr>
+          ))}
+          {recent.length === 0 && <tr><td class="py-6 text-center text-gray-400">暂无订单。</td></tr>}
         </tbody>
       </table>
     </section>
 
     <section>
       <div class="mb-3 flex items-baseline justify-between">
-        <h2 class="text-xs uppercase tracking-widest text-gray-400">Low stock</h2>
-        <a
-          href="/admin/products?sort=stock&dir=asc"
-          class="text-xs uppercase tracking-widest text-accent hover:underline"
-        >
-          View all
-        </a>
+        <h2 class="text-xs uppercase tracking-widest text-gray-400">库存不足</h2>
+        <a href="/admin/products?sort=stock&dir=asc" class="text-xs uppercase tracking-widest text-accent hover:underline">查看全部</a>
       </div>
       <table class="w-full text-left text-sm">
         <tbody>
-          {
-            lowStock.map((p) => (
-              <tr class="border-b border-line">
-                <td class="py-2 pr-4">
-                  <a href={`/admin/products/${p.public_id}/edit`} class="hover:text-brand">
-                    {p.name}
-                  </a>
-                </td>
-                <td class="py-2 text-right tabular-nums">
-                  <span class={0 >= p.stock ? 'text-red-600' : 'text-amber-700'}>
-                    {p.stock} left
-                  </span>
-                </td>
-              </tr>
-            ))
-          }
-          {
-            lowStock.length === 0 && (
-              <tr>
-                <td class="py-6 text-center text-gray-400">Everything's well-stocked.</td>
-              </tr>
-            )
-          }
+          {lowStock.map((p) => (
+            <tr class="border-b border-line">
+              <td class="py-2 pr-4"><a href={`/admin/products/${p.public_id}/edit`} class="hover:text-brand">{p.name}</a></td>
+              <td class="py-2 text-right tabular-nums"><span class={0 >= p.stock ? 'text-red-600' : 'text-amber-700'}>{p.stock} 件剩余</span></td>
+            </tr>
+          ))}
+          {lowStock.length === 0 && <tr><td class="py-6 text-center text-gray-400">库存充足。</td></tr>}
         </tbody>
       </table>
     </section>
