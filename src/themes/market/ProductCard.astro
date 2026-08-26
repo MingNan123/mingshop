@@ -12,36 +12,44 @@ const { card, index = 0, headingLevel = 'h2' } = Astro.props;
 const Heading = headingLevel;
 ---
 
-<li class="market-hover market-reveal overflow-hidden rounded-[28px] bg-[color:var(--market-surface)]" style={`animation-delay:${Math.min(index, 8) * 55}ms`}>
-  <a href={card.href} class="group flex h-full flex-col p-4 sm:p-5">
+<li class="market-hover market-product-reveal overflow-hidden rounded-[28px] bg-[color:var(--market-surface)]" style={`--reveal-delay:${Math.min(index, 10) * 55}ms`}>
+  <a href={card.href} class="group flex h-full flex-col p-4 sm:p-5" aria-label={`查看 ${card.name}`}>
     <div class="relative mb-5 aspect-[4/3] overflow-hidden rounded-[22px] bg-white">
       <StoreImage
         image={card.image}
         fade
-        class={`h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.035]${card.inStock ? '' : ' opacity-50'}`}
+        class={`h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.045]${card.inStock ? '' : ' opacity-50'}`}
       />
-      <div class="absolute left-4 top-4 flex flex-wrap gap-2">
-        {card.billingInterval === 'month' && (
-          <span class="rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--color-ink)] shadow-sm backdrop-blur">每月订阅</span>
-        )}
-        {!card.inStock && (
-          <span class="rounded-full bg-[color:var(--color-ink)] px-3 py-1.5 text-[11px] font-semibold text-white">暂时售罄</span>
-        )}
+      <div class="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
+        <div class="flex flex-wrap gap-2">
+          {card.billingInterval && (
+            <span class="rounded-full bg-white/92 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--color-ink)] shadow-sm backdrop-blur">
+              {card.billingInterval === 'year' ? '年度订阅' : '每月订阅'}
+            </span>
+          )}
+          {!card.inStock && (
+            <span class="rounded-full bg-[color:var(--color-ink)] px-3 py-1.5 text-[11px] font-semibold text-white">暂时售罄</span>
+          )}
+        </div>
+        <span class="market-image-arrow flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/88 text-[color:var(--color-ink)] shadow-sm backdrop-blur transition" aria-hidden="true">↗</span>
       </div>
     </div>
 
     <div class="flex flex-1 flex-col px-1 pb-1">
-      <Heading class="text-xl font-semibold tracking-[-0.025em] text-[color:var(--color-ink)] transition-colors group-hover:text-[color:var(--color-brand)] sm:text-2xl">
-        {card.name}
-      </Heading>
+      <div class="flex items-start justify-between gap-4">
+        <Heading class="text-xl font-semibold tracking-[-0.03em] text-[color:var(--color-ink)] transition-colors group-hover:text-[color:var(--color-brand)] sm:text-2xl">{card.name}</Heading>
+      </div>
       <p class="mt-2 line-clamp-2 text-[13px] leading-6 text-[color:var(--market-muted)]">{card.description ?? '数字化效率工具，开箱即用。'}</p>
 
       <div class="mt-auto flex items-end justify-between gap-3 pt-6">
         <div>
-          <span class="text-2xl font-semibold tracking-[-0.035em]">{card.formattedPrice}</span>
+          <span class="text-2xl font-semibold tracking-[-0.04em]">{card.formattedPrice}</span>
           {card.billingInterval === 'month' && <span class="ml-1 text-[12px] text-[color:var(--market-muted)]">/ 月</span>}
+          {card.billingInterval === 'year' && <span class="ml-1 text-[12px] text-[color:var(--market-muted)]">/ 年</span>}
         </div>
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-ink)] text-white transition group-hover:bg-[color:var(--color-brand)]" aria-hidden="true">→</span>
+        <span class="inline-flex h-9 items-center gap-1 rounded-full bg-[color:var(--color-ink)] px-4 text-[11px] font-semibold text-white transition group-hover:bg-[color:var(--color-brand)]">
+          {card.inStock ? '查看产品' : '查看详情'} <span class="transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
+        </span>
       </div>
     </div>
   </a>
