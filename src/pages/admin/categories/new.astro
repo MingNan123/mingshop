@@ -8,12 +8,13 @@ const parentOptions = flattenTree(buildTree(await listCategories(env.DB)));
 const error = Astro.url.searchParams.get('error');
 ---
 
-<AdminLayout title="New category" active="categories">
-  <a href="/admin/categories" class="text-sm text-gray-500 hover:text-brand">&larr; Back to categories</a>
-  <h1 class="mt-4 mb-6 text-2xl font-bold">New category</h1>
+<AdminLayout title="新建分类" active="categories">
+  <a href="/admin/categories" class="text-sm text-gray-500 hover:text-brand">&larr; 返回分类管理</a>
+  <h1 class="mt-4 mb-2 text-2xl font-bold">新建分类</h1>
+  <p class="mb-6 text-sm text-gray-500">创建一个新的商品分类，可设置为顶级分类或放在已有分类下面。</p>
   <CategoryForm
     action="/api/admin/categories"
-    submitLabel="Create category"
+    submitLabel="创建分类"
     parentOptions={parentOptions}
     error={error}
   />
