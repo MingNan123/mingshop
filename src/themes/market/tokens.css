@@ -1,9 +1,4 @@
-/*
- * Market — premium, minimal storefront tokens.
- * Inspired by the restraint of modern hardware/software product pages:
- * generous whitespace, quiet borders, large typography and motion-friendly
- * surfaces. No brand assets or proprietary Apple UI are copied.
- */
+/* Market — premium, minimal storefront tokens. */
 @theme {
   --color-brand: #0071e3;
   --color-brand-hover: #0077ed;
@@ -36,16 +31,11 @@
   --market-stock-low: #b36a00;
   --market-muted: #6e6e73;
   --market-surface: #f5f5f7;
-  --market-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+  --market-shadow: 0 18px 50px rgba(0, 0, 0, 0.10);
 }
 
 html { scroll-behavior: smooth; }
-
-body {
-  background: #fff;
-  color: var(--color-ink);
-  letter-spacing: -0.01em;
-}
+body { background: #fff; color: var(--color-ink); letter-spacing: -0.01em; }
 
 @layer base {
   :where(a, button, input, select, summary, [tabindex]):focus-visible {
@@ -56,12 +46,25 @@ body {
 
 @media (prefers-reduced-motion: no-preference) {
   .market-reveal { animation: market-reveal 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  .market-hover {
-    transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 300ms ease, background-color 300ms ease;
-  }
-  .market-hover:hover { transform: translateY(-4px); box-shadow: var(--market-shadow); }
-  @keyframes market-reveal {
-    from { opacity: 0; transform: translateY(18px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+  .market-product-reveal { opacity: 0; transform: translateY(24px); transition: opacity 650ms cubic-bezier(0.22,1,0.36,1) var(--reveal-delay, 0ms), transform 650ms cubic-bezier(0.22,1,0.36,1) var(--reveal-delay, 0ms); }
+  .market-product-reveal.market-visible { opacity: 1; transform: translateY(0); }
+  .market-feature { opacity: 0; transform: translateY(18px); transition: opacity 650ms cubic-bezier(0.22,1,0.36,1) var(--reveal-delay, 0ms), transform 650ms cubic-bezier(0.22,1,0.36,1) var(--reveal-delay, 0ms); }
+  .market-feature.market-visible { opacity: 1; transform: translateY(0); }
+  .market-hover { transition: transform 300ms cubic-bezier(0.22,1,0.36,1), box-shadow 300ms ease, background-color 300ms ease; }
+  .market-hover:hover { transform: translateY(-5px); box-shadow: var(--market-shadow); }
+  .market-chip { will-change: transform; }
+  .market-chip:hover { transform: translateY(-1px); }
+  .market-image-arrow { transform: translateY(0); }
+  .group:hover .market-image-arrow { transform: translateY(-2px) rotate(-4deg); }
+  .market-cta:hover span { transform: translateY(2px); }
+  .market-orb { position: absolute; border-radius: 9999px; filter: blur(60px); pointer-events: none; animation: market-float 9s ease-in-out infinite; }
+  .market-orb-one { width: 22rem; height: 22rem; left: -7rem; top: 35%; background: rgba(0,113,227,.18); }
+  .market-orb-two { width: 28rem; height: 28rem; right: -9rem; top: 10%; background: rgba(124,58,237,.16); animation-delay: -3s; }
+  @keyframes market-reveal { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes market-float { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(0,-18px,0) scale(1.04); } }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .market-product-reveal, .market-feature { opacity: 1; transform: none; }
 }
