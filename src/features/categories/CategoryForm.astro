@@ -25,36 +25,37 @@ const inputClass =
   }
 
   <div>
-    <label class="block text-sm font-medium" for="name">Name</label>
-    <input id="name" name="name" type="text" required value={category?.name ?? ''} class={inputClass} />
+    <label class="block text-sm font-medium" for="name">分类名称</label>
+    <input id="name" name="name" type="text" required value={category?.name ?? ''} class={inputClass} placeholder="例如：服饰、电子产品、家居生活" />
+    <p class="mt-1 text-xs text-gray-500">名称会显示在商城分类、导航和商品筛选中。</p>
   </div>
 
   <div>
     <label class="block text-sm font-medium" for="slug">
-      Slug <span class="text-faint">(URL — blank to auto-generate from name)</span>
+      链接标识 <span class="text-faint">（URL；留空则根据名称自动生成）</span>
     </label>
-    <input id="slug" name="slug" type="text" value={category?.slug ?? ''} placeholder="auto-from-name" class={inputClass} />
+    <input id="slug" name="slug" type="text" value={category?.slug ?? ''} placeholder="留空自动生成，例如 apparel" class={inputClass} />
   </div>
 
   <div>
-    <label class="block text-sm font-medium" for="parent_id">Parent category</label>
+    <label class="block text-sm font-medium" for="parent_id">上级分类</label>
     <select id="parent_id" name="parent_id" class={inputClass}>
-      <option value="">— none (top level) —</option>
+      <option value="">— 无（顶级分类）—</option>
       {
-        // Values are cat_ public IDs — resolved back to row ids server-side.
         parentOptions.map((o) => (
           <option value={o.public_id} selected={category?.parent_id === o.id}>
-            {'  '.repeat(o.depth) + o.name}
+            {'  '.repeat(o.depth) + o.name}
           </option>
         ))
       }
     </select>
+    <p class="mt-1 text-xs text-gray-500">可以建立多级分类，例如「服饰 → 男装 → 外套」。</p>
   </div>
 
   <div class="flex gap-3 pt-2">
     <button type="submit" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">
       {submitLabel}
     </button>
-    <a href="/admin/categories" class="rounded-md border border-line px-5 py-2 hover:bg-surface">Cancel</a>
+    <a href="/admin/categories" class="rounded-md border border-line px-5 py-2 hover:bg-surface">取消</a>
   </div>
 </form>
