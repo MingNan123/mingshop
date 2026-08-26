@@ -3,8 +3,11 @@ import { uploadDigitalFile, validateDigitalFile } from './digitalFile';
 import type { StorageProvider } from '../storage/provider';
 
 describe('digital deliverables', () => {
-  it('requires an allowed MIME and matching extension', () => {
+  it('accepts supported files and common browser MIME variants', () => {
     expect(validateDigitalFile(new File(['pdf'], 'guide.pdf', { type: 'application/pdf' }))).toBeNull();
+    expect(validateDigitalFile(new File(['zip'], 'RuoYi-Vue-master.zip', { type: 'application/zip' }))).toBeNull();
+    expect(validateDigitalFile(new File(['zip'], 'RuoYi-Vue-master.zip', { type: 'application/x-zip-compressed' }))).toBeNull();
+    expect(validateDigitalFile(new File(['m4a'], 'audio.m4a', { type: 'audio/x-m4a' }))).toBeNull();
     expect(validateDigitalFile(new File(['pdf'], 'guide.zip', { type: 'application/pdf' }))).toMatch(/PDF/);
     expect(validateDigitalFile(new File([], 'empty.pdf', { type: 'application/pdf' }))).toMatch(/non-empty/);
   });
