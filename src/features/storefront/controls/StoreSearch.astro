@@ -1,15 +1,7 @@
 ---
 /**
  * The storefront search form. Owns the GET method, the `q` field name, the
- * search landmark role, and the accessible label — the parts that make search
- * work and stay reachable. Where it sits and how wide it is belong to the
- * header, so the root takes a `class`.
- *
- * The field's own appearance is a set decision too, hence `inputClass`. It was
- * hardcoded here, which meant any header drawing its own rule around search got
- * two stacked hairlines — the control's and its own. The default below is the
- * editorial underline the default set has always rendered, so sets that don't
- * pass anything are unaffected.
+ * search landmark role, and the accessible label.
  */
 interface Props {
   action: string;
@@ -34,8 +26,8 @@ const {
     type="search"
     name="q"
     value={query}
-    placeholder="Search"
-    aria-label="Search products"
+    placeholder="搜索"
+    aria-label="搜索商品"
     class={inputClass}
   />
 </form>
