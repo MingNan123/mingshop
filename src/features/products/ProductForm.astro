@@ -46,8 +46,8 @@ const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:bo
       <section id="digital" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
         <div class="mb-4"><h2 class="font-medium">数字商品</h2><p class="mt-1 text-xs text-gray-500">付款成功后可向客户提供私密下载。</p></div>
         {product?.file_key && <p class="mb-3 text-sm text-gray-600">已附加：<strong>{product.file_name ?? 'download'}</strong>{product.file_size_bytes != null && `（${Math.ceil(product.file_size_bytes / 1024)} KB）`}</p>}
-        <label class="block text-sm font-medium" for="deliverable">{product?.file_key ? '替换文件' : '添加文件'}</label><input id="deliverable" name="deliverable" type="file" accept=".pdf,.zip,.epub,.mp3,.m4a,.txt" class="mt-2 block w-full text-sm text-gray-600" />
-        <p class="mt-1 text-xs text-gray-500">支持 PDF、ZIP、EPUB、MP3、M4A、TXT，最大 25 MB。</p>
+        <label class="block text-sm font-medium" for="deliverable">{product?.file_key ? '替换文件' : '添加文件'}</label><input id="deliverable" name="deliverable" type="file" class="mt-2 block w-full text-sm text-gray-600" />
+        <p class="mt-1 text-xs text-gray-500">支持常见数字文件格式，最大 100 MB。</p>
         {product?.file_key && <label class="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" name="remove_deliverable" class="h-4 w-4" />删除数字附件</label>}
       </section>
 
