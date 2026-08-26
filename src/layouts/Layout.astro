@@ -92,6 +92,21 @@ const shell = buildShellModel({
   </head>
   <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
     <StoreHeader model={shell} />
+    <div class="flex justify-end px-6 pt-4">
+      <button
+        type="button"
+        data-page-refresh
+        class="inline-flex items-center gap-2 rounded-md border border-line bg-white/60 px-3 py-2 text-xs uppercase tracking-widest text-gray-500 transition hover:border-brand hover:text-brand"
+        title="刷新页面"
+        aria-label="刷新页面"
+      >
+        <svg class="size-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M16 10a6 6 0 1 1-1.76-4.24" stroke-linecap="round" />
+          <path d="M16 4v4h-4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        刷新
+      </button>
+    </div>
     <main class="page-shell"><slot /></main>
     <StoreFooter model={shell} />
 
@@ -122,6 +137,10 @@ const shell = buildShellModel({
 
     <script>
       // @ts-nocheck
+      document.querySelector('[data-page-refresh]')?.addEventListener('click', () => {
+        window.location.reload();
+      });
+
       const drawer = document.querySelector('[data-cart-drawer]');
       if (drawer instanceof HTMLElement) {
         const panel = drawer.querySelector('[data-cart-panel]');
@@ -196,8 +215,6 @@ const shell = buildShellModel({
         });
       }
 
-      // Frontend Chinese fallback for legacy storefront templates. This is intentionally
-      // exact-match only, so product names/descriptions written by the merchant are never altered.
       (() => {
         const translations = {
           'Your cart': '购物车', 'Continue shopping': '继续购物', 'Your account': '账户',
