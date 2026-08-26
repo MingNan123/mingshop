@@ -4,66 +4,56 @@ import ProductCard from './ProductCard.astro';
 import CatalogSort from '../../features/storefront/controls/CatalogSort.astro';
 import CatalogPagination from '../../features/storefront/controls/CatalogPagination.astro';
 
-/**
- * Market — the catalogue as a working surface.
- *
- * Categories are a chip rail and sort is a segmented control, both on one
- * toolbar strip, so the whole filter state is legible in a single glance
- * without scrolling past a masthead. The grid runs five across on 1px
- * hairlines rather than gutters: the tiles read as one continuous table.
- *
- * <CatalogSort> and <CatalogPagination> are restyled through `class` only. The
- * hrefs they carry encode the catalogue's query semantics — which pages exist,
- * which URL is canonical — and rebuilding them here would fork that.
- */
-interface Props {
-  model: CatalogPageModel;
-}
-
+interface Props { model: CatalogPageModel; }
 const { model } = Astro.props;
-const chip =
-  'border border-line bg-paper px-2.5 py-1 text-[11px] font-semibold text-[color:var(--market-muted)] hover:border-gray-900 hover:text-gray-900';
+const chip = 'rounded-full border border-line bg-white px-4 py-2 text-[12px] font-medium text-[color:var(--market-muted)] transition hover:border-[color:var(--color-ink)] hover:text-[color:var(--color-ink)]';
 ---
 
-<div
-  class="-mx-4 flex flex-wrap items-center gap-2 border-y border-line bg-[color:var(--market-surface)] px-4 py-2"
->
-  {model.categories.map((category) => <a href={category.href} class={chip}>{category.text}</a>)}
-  <CatalogSort
-    model={model.sort}
-    class="ml-auto flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--market-muted)]"
-  />
-</div>
+<section class="overflow-hidden">
+  <div class="relative -mx-4 mb-8 overflow-hidden bg-[color:var(--color-ink)] px-6 py-20 text-center text-white sm:-mx-6 sm:px-10 sm:py-28 lg:-mx-8 lg:py-36">
+    <div class="relative z-10 mx-auto max-w-4xl market-reveal">
+      <p class="mb-4 text-[12px] font-semibold uppercase tracking-[0.22em] text-white/60">{model.eyebrow}</p>
+      <h1 class="text-5xl font-semibold tracking-[-0.055em] sm:text-7xl lg:text-[6.5rem] lg:leading-[0.9]">{model.heading}</h1>
+      <p class="mx-auto mt-7 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">精选数字产品与效率工具。简单、快速、专注于真正有用的功能。</p>
+      <a href="#products" class="mt-8 inline-flex rounded-full bg-white px-6 py-3 text-[13px] font-semibold text-[color:var(--color-ink)] transition hover:bg-white/90">浏览全部产品</a>
+    </div>
+    <div class="absolute -left-24 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-blue-500/20 blur-3xl"></div>
+    <div class="absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-purple-500/20 blur-3xl"></div>
+  </div>
 
-<div class="flex flex-wrap items-baseline gap-3 py-4">
-  <h1 class="text-[22px] font-extrabold tracking-tight">{model.heading}</h1>
-  <p class="font-serif text-xs text-[color:var(--market-muted)]">
-    {model.products.length} shown
-    {model.pagination.totalPages > 1 && ` · page ${model.pagination.page}/${model.pagination.totalPages}`}
-  </p>
-</div>
+  <div class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center">
+    <div class="flex min-w-0 flex-wrap gap-2 overflow-x-auto pb-1">
+      {model.categories.map((category) => <a href={category.href} class={chip}>{category.text}</a>)}
+    </div>
+    <CatalogSort
+      model={model.sort}
+      class="ml-auto flex shrink-0 items-center gap-3 rounded-full bg-[color:var(--market-surface)] px-4 py-2 text-[11px] font-semibold text-[color:var(--market-muted)]"
+    />
+  </div>
 
-{
-  /* role="status" is the contract, not the wording: an empty catalogue must
-     announce itself rather than rendering a blank grid. */
-  model.products.length === 0 && (
-    <p role="status" class="border border-line bg-[color:var(--market-surface)] p-6 text-sm">
-      Nothing here yet. Check back shortly.
+  <div id="products" class="mb-5 flex items-end justify-between gap-4">
+    <div>
+      <p class="mb-1 text-[12px] font-semibold uppercase tracking-[0.16em] text-[color:var(--market-muted)]">精选</p>
+      <h2 class="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">所有产品</h2>
+    </div>
+    <p class="hidden text-[13px] text-[color:var(--market-muted)] sm:block">
+      {model.products.length} 个产品
+      {model.pagination.totalPages > 1 && ` · ${model.pagination.page}/${model.pagination.totalPages}`}
     </p>
-  )
-}
+  </div>
 
-{
-  model.products.length > 0 && (
-    <ul class="-mx-4 grid grid-cols-2 gap-px border-y border-line bg-line sm:grid-cols-3 lg:grid-cols-5">
-      {model.products.map((card, i) => (
-        <ProductCard card={card} index={i} />
-      ))}
+  {model.products.length === 0 && (
+    <p role="status" class="rounded-3xl bg-[color:var(--market-surface)] p-10 text-center text-sm text-[color:var(--market-muted)]">暂时没有可购买的产品。</p>
+  )}
+
+  {model.products.length > 0 && (
+    <ul class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {model.products.map((card, i) => <ProductCard card={card} index={i} />)}
     </ul>
-  )
-}
+  )}
 
-<CatalogPagination
-  model={model.pagination}
-  class="mt-6 flex items-center justify-center gap-1 font-serif text-xs"
-/>
+  <CatalogPagination
+    model={model.pagination}
+    class="mt-10 flex items-center justify-center gap-2 text-[13px] font-medium"
+  />
+</section>
