@@ -3,13 +3,18 @@ import { uploadDigitalFile, validateDigitalFile } from './digitalFile';
 import type { StorageProvider } from '../storage/provider';
 
 describe('digital deliverables', () => {
-  it('accepts supported files and common browser MIME variants', () => {
+  it('accepts common digital files without MIME-specific restrictions', () => {
     expect(validateDigitalFile(new File(['pdf'], 'guide.pdf', { type: 'application/pdf' }))).toBeNull();
-    expect(validateDigitalFile(new File(['zip'], 'RuoYi-Vue-master.zip', { type: 'application/zip' }))).toBeNull();
     expect(validateDigitalFile(new File(['zip'], 'RuoYi-Vue-master.zip', { type: 'application/x-zip-compressed' }))).toBeNull();
-    expect(validateDigitalFile(new File(['m4a'], 'audio.m4a', { type: 'audio/x-m4a' }))).toBeNull();
-    expect(validateDigitalFile(new File(['pdf'], 'guide.zip', { type: 'application/pdf' }))).toMatch(/PDF/);
-    expect(validateDigitalFile(new File([], 'empty.pdf', { type: 'application/pdf' }))).toMatch(/non-empty/);
+    expect(validateDigitalFile(new File(['docx'], 'manual.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }))).toBeNull();
+    expect(validateDigitalFile(new File(['bin'], 'archive.7z', { type: 'application/x-7z-compressed' }))).toBeNull();
+    expect(validateDigitalFile(new File(['data'], 'unknown.bin', { type: '' }))).toBeNull();
+    expect(validateDigitalFile(new File([], 'empty.zip', { type: 'application/zip' }))).toMatch(/non-empty/);
+  });
+
+  it('rejects files over the 100 MB limit', () => {
+    const file = { size: 100 * 1024 * 1024 + 1, name: 'large.zip', type: 'application/zip' } as File;
+    expect(validateDigitalFile(file)).toMatch(/100 MB/);
   });
 
   it('uploads under an immutable unique key with private metadata', async () => {
