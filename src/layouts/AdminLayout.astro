@@ -68,23 +68,33 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? '菜单';
     </div>
     <script>
       (() => {
-        const t = {
+        const t: Record<string, string> = {
           Dashboard:'仪表盘', Products:'商品', Product:'商品', Orders:'订单', Order:'订单', Customers:'客户', Categories:'分类', Pages:'页面', Navigation:'导航', Shipping:'配送', Media:'媒体库', Settings:'设置',
           Save:'保存', Cancel:'取消', Delete:'删除', Edit:'编辑', Create:'创建', Update:'更新', Add:'添加', Remove:'删除', Search:'搜索', Filter:'筛选', Reset:'重置', Close:'关闭', Back:'返回', Next:'下一步', Previous:'上一步', Submit:'提交', Confirm:'确认', Loading:'加载中',
           'Save changes':'保存更改', 'Create product':'创建商品', 'Edit product':'编辑商品', 'New product':'新建商品', 'Add product':'添加商品', 'Delete product':'删除商品',
-          'View store':'查看商城', 'Log out':'退出登录', 'Log in':'登录', 'Sign in':'登录', 'Email':'邮箱', 'Password':'密码', 'Name':'名称', 'Description':'描述', 'Status':'状态', 'Actions':'操作', 'Total':'总计', 'Price':'价格', 'Quantity':'数量', 'Stock':'库存', 'Customer':'客户',
-          'Payment':'支付', 'Payments':'支付', 'Payment method':'支付方式', 'Shipping address':'配送地址', 'Shipping method':'配送方式', 'Tax':'税费', 'Subtotal':'小计', 'Discount':'优惠', 'Refund':'退款', 'Refunded':'已退款', 'Pending':'待处理', 'Paid':'已支付', 'Cancelled':'已取消', 'Completed':'已完成', 'Active':'启用', 'Inactive':'停用',
-          'No results':'暂无结果', 'No products found':'暂无商品', 'No orders found':'暂无订单', 'Something went wrong':'出了点问题，请稍后重试', 'An error occurred':'发生错误，请稍后重试', 'Are you sure?':'确定要继续吗？',
-          'Finish setting up your store':'完成商城设置', 'Admin':'管理后台', 'Menu':'菜单'
+          'View store':'查看商城', 'View Store':'查看商城', 'Log out':'退出登录', 'Log in':'登录', 'Sign in':'登录', Email:'邮箱', Password:'密码', Name:'名称', Description:'描述', Status:'状态', Actions:'操作', Total:'总计', Price:'价格', Quantity:'数量', Stock:'库存', Customer:'客户',
+          Payment:'支付', Payments:'支付', 'Payment method':'支付方式', 'Payment reference':'支付参考号', 'Shipping address':'配送地址', 'Shipping method':'配送方式', Tax:'税费', Subtotal:'小计', Discount:'优惠', Refund:'退款', Refunds:'退款', Refunded:'已退款', Pending:'待处理', Paid:'已支付', Cancelled:'已取消', Completed:'已完成', Active:'启用', Inactive:'停用',
+          Fulfillment:'履约', Fulfilled:'已履约', Unfulfilled:'未履约', 'All payments':'全部支付状态', 'Any fulfillment':'全部履约状态', 'All methods':'全部方式', Method:'方式', When:'时间', 'Last order':'最近订单', 'Lifetime value':'累计消费', 'No customers yet.':'暂无客户。',
+          'Order #':'订单号', 'Public ID':'公开 ID', 'Order # or ID':'订单号或 ID', Find:'查找', 'Export CSV':'导出 CSV', 'Export these':'导出当前结果', 'No order matches':'没有找到匹配的订单。', 'No orders found':'暂无订单', 'No orders yet.':'暂无订单。', 'No products found':'暂无商品', 'No products yet.':'暂无商品。', 'No results':'暂无结果',
+          'Inventory reconciliation required':'需要处理库存对账', 'Mark reconciled':'标记为已对账', 'inventory exception':'库存异常', 'inventory exceptions':'库存异常', 'need attention':'需要处理',
+          'These paid orders arrived after their stock holds ended. Open each order to reconcile the oversold quantity.':'这些已支付订单在库存预留结束后到达。请打开相关订单并处理超卖数量。', 'No order records this payment':'没有订单记录这笔支付', Dismiss:'忽略', Retry:'重试',
+          'Something went wrong':'出了点问题，请稍后重试', 'An error occurred':'发生错误，请稍后重试', 'Are you sure?':'确定要继续吗？', 'Store basics':'商城基本信息', 'Store name':'商城名称', 'Store time zone':'商城时区', 'Admin password':'管理员密码', 'New password':'新密码', 'New password (optional)':'新密码（可选）',
+          Demo:'演示', 'Finish setup':'完成设置', 'Set up your store':'设置商城', 'Load the demo catalog':'加载演示商品目录', 'Shipping zones':'配送区域', 'Add zone':'添加区域', 'Remove zone':'删除区域', 'Add rate':'添加配送费率', 'Remove rate':'删除配送费率', 'Add band':'添加区间', 'Remove band':'删除区间',
+          'New page':'新建页面', 'Edit page':'编辑页面', 'Create page':'创建页面', 'Delete page':'删除页面', Published:'已发布', Draft:'草稿', 'Add navigation item':'添加导航项', 'Navigation items':'导航项', Label:'标签', URL:'网址', 'Move up':'上移', 'Move down':'下移',
+          'Media library':'媒体库', Upload:'上传', 'Copy URL':'复制链接', Copied:'已复制', Unused:'未使用', Used:'已使用', 'Delete media':'删除媒体', 'New category':'新建分类', 'Edit category':'编辑分类', 'Create category':'创建分类', 'Delete category':'删除分类',
+          'Customer details':'客户详情', 'Customer orders':'客户订单', 'No orders':'暂无订单', 'Ship to':'配送至', Placed:'下单时间', Tracking:'物流追踪', 'Tracking number':'物流单号', 'Reconcile with Shippo':'与 Shippo 对账', 'Label PDF':'物流标签 PDF',
+          'A purchased label is not reflected on this order':'已购买的物流标签尚未同步到此订单', 'The order changed state (refunded or fulfilled another way) while this label was being bought, so its tracking was not applied.':'购买物流标签期间订单状态发生变化（已退款或通过其他方式完成履约），因此物流信息未应用到订单。', 'Force-discarding abandons the single-purchase guarantee for this order':'强制丢弃会放弃此订单的单次购买保障',
+          Stripe:'Stripe', Lightning:'闪电网络', Bitcoin:'比特币', OpenNode:'OpenNode', Card:'银行卡', 'Not found':'未找到', Forbidden:'无权访问', Unauthorized:'未授权', 'Server error':'服务器错误', 'Finish setting up your store':'完成商城设置', Admin:'管理后台', Menu:'菜单'
         };
-        const translate = (root = document.body) => {
-          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const nodes=[]; let n;
-          while ((n=walker.nextNode())) nodes.push(n);
-          for (const node of nodes) { const v=node.nodeValue; if (!v) continue; const key=v.trim(); if (t[key]) node.nodeValue=v.replace(key,t[key]); }
-          for (const el of root.querySelectorAll('input,textarea,button,[aria-label],[title]')) for (const a of ['placeholder','aria-label','title']) { const v=el.getAttribute(a); if(v && t[v]) el.setAttribute(a,t[v]); }
+        const translate = (root: ParentNode = document.body) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          const nodes: Text[] = []; let n: Node | null;
+          while ((n = walker.nextNode())) nodes.push(n as Text);
+          for (const node of nodes) { const value = node.nodeValue; if (!value) continue; const key = value.trim(); if (t[key]) node.nodeValue = value.replace(key, t[key]); }
+          for (const el of root.querySelectorAll?.('input,textarea,button,[aria-label],[title]') ?? []) for (const attr of ['placeholder','aria-label','title']) { const value = el.getAttribute(attr); if (value && t[value]) el.setAttribute(attr, t[value]); }
         };
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',()=>translate()); else translate();
-        new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n instanceof HTMLElement) translate(n);}))).observe(document.body,{childList:true,subtree:true});
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => translate()); else translate();
+        new MutationObserver((records) => records.forEach((r) => r.addedNodes.forEach((n) => { if (n instanceof HTMLElement) translate(n); }))).observe(document.body, { childList: true, subtree: true });
       })();
     </script>
   </body>
