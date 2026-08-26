@@ -68,19 +68,16 @@ const shell = buildShellModel({
     <title>{pageTitle}</title>
     <meta name="description" content={desc} />
     <link rel="canonical" href={canonical} />
-
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content={storeName} />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={desc} />
     <meta property="og:url" content={canonical} />
     {ogImage && <meta property="og:image" content={ogImage} />}
-
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={desc} />
     {ogImage && <meta name="twitter:image" content={ogImage} />}
-
     <script is:inline>
       document.documentElement.classList.add('image-fade-enabled');
       const finishImageFade = (event) => {
@@ -95,11 +92,7 @@ const shell = buildShellModel({
   </head>
   <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
     <StoreHeader model={shell} />
-
-    <main class="page-shell">
-      <slot />
-    </main>
-
+    <main class="page-shell"><slot /></main>
     <StoreFooter model={shell} />
 
     <div
@@ -121,9 +114,7 @@ const shell = buildShellModel({
             data-cart-close
             aria-label="关闭购物车"
             class="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-3xl leading-none text-faint transition-colors hover:bg-surface hover:text-brand"
-          >
-            &times;
-          </button>
+          >&times;</button>
         </div>
         <div data-cart-body class="flex-1 overflow-y-auto px-6 py-5"></div>
       </aside>
@@ -138,7 +129,6 @@ const shell = buildShellModel({
         const body = drawer.querySelector('[data-cart-body]');
         const label = document.querySelector('[data-cart-count-label]');
         const cartCountKey = 'minshop_cart_count';
-
         const renderBadge = (n) => {
           const count = Math.max(0, Number(n) || 0);
           if (label) label.textContent = count > 0 ? ` (${count > 99 ? '99+' : count})` : '';
@@ -150,9 +140,7 @@ const shell = buildShellModel({
         };
         const setBadge = (n) => {
           const count = renderBadge(n);
-          try {
-            localStorage.setItem(cartCountKey, String(count));
-          } catch {}
+          try { localStorage.setItem(cartCountKey, String(count)); } catch {}
         };
         if (label) {
           renderBadge(countFromCookie());
@@ -164,12 +152,10 @@ const shell = buildShellModel({
         const open = () => {
           document.querySelector('[data-nav-disclosure]')?.removeAttribute('open');
           drawer.classList.remove('invisible', 'pointer-events-none');
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => {
-              panel?.classList.remove('translate-x-full');
-              backdrop?.classList.remove('opacity-0');
-            }),
-          );
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            panel?.classList.remove('translate-x-full');
+            backdrop?.classList.remove('opacity-0');
+          }));
           document.body.style.overflow = 'hidden';
         };
         const close = () => {
@@ -184,12 +170,9 @@ const shell = buildShellModel({
           const root = body?.querySelector('[data-cart-count]');
           setBadge(root ? Number(root.getAttribute('data-cart-count')) : 0);
         };
-
         for (const el of document.querySelectorAll('[data-cart-open]')) {
           el.addEventListener('click', async (e) => {
-            e.preventDefault();
-            await refresh();
-            open();
+            e.preventDefault(); await refresh(); open();
           });
         }
         drawer.querySelector('[data-cart-close]')?.addEventListener('click', close);
@@ -197,7 +180,6 @@ const shell = buildShellModel({
         document.addEventListener('keydown', (e) => {
           if (e.key === 'Escape' && !drawer.classList.contains('invisible')) close();
         });
-
         document.addEventListener('submit', async (e) => {
           const form = e.target;
           if (!(form instanceof HTMLFormElement)) return;
@@ -207,14 +189,72 @@ const shell = buildShellModel({
           if (location.pathname === '/cart') return;
           e.preventDefault();
           await fetch('/api/cart', {
-            method: 'POST',
-            headers: { 'X-Partial': '1' },
+            method: 'POST', headers: { 'X-Partial': '1' },
             body: new URLSearchParams(new FormData(form)),
           });
-          await refresh();
-          open();
+          await refresh(); open();
         });
       }
+
+      // Frontend Chinese fallback for legacy storefront templates. This is intentionally
+      // exact-match only, so product names/descriptions written by the merchant are never altered.
+      (() => {
+        const translations = {
+          'Your cart': '购物车', 'Continue shopping': '继续购物', 'Your account': '账户',
+          'Your orders': '我的订单', 'Sign out': '退出登录', 'Signed in as': '当前登录账号：',
+          'No orders yet.': '暂无订单。', 'Start shopping': '开始购物', 'Cart': '购物车',
+          'Search': '搜索', 'Search products': '搜索商品', 'Account': '账户',
+          'Quantity': '数量', 'Update': '更新', 'Remove': '删除', 'Subtotal': '小计',
+          'Checkout': '结账', 'Checkout is currently unavailable.': '当前暂时无法结账。',
+          'Ship to': '配送至', 'each': '件', 'Out of stock': '缺货',
+          'Only ': '仅剩 ', ' available': ' 件可购买',
+          'Pay with card': '银行卡支付', 'Visa, Mastercard, Apple Pay & more': '支持 Visa、Mastercard、Apple Pay 等',
+          'Pay with Lightning ⚡': 'Lightning 支付 ⚡', 'Instant — from any Lightning wallet': '即时到账，支持 Lightning 钱包',
+          'Pay with Bitcoin': '比特币支付', 'On-chain or Lightning (OpenNode)': '链上或 Lightning 支付',
+          'Demo checkout': '演示结账', 'Simulated — places a real test order, no charge': '模拟支付，会创建测试订单，不会产生实际扣款',
+          'Set up card payments': '配置银行卡支付', 'Set up Lightning': '配置 Lightning', 'Set up OpenNode': '配置 OpenNode',
+          'Place demo order': '提交演示订单', 'A valid email is required.': '请输入有效的邮箱地址。',
+          'Name is required.': '请输入姓名。', 'Address is required.': '请输入地址。',
+          'City is required.': '请输入城市。', 'Postal code is required.': '请输入邮政编码。',
+          'Please choose a shipping option.': '请选择配送方式。',
+          "Sorry, we don't ship to": '抱歉，我们暂不支持配送至',
+          'This order is too heavy for the available shipping services.': '订单重量超出当前配送服务范围。',
+          'Some inventory just sold out — please review your cart.': '部分商品刚刚售罄，请返回购物车检查。',
+          'Payment failed.': '支付失败。', 'Payment successful.': '支付成功。',
+          'Order confirmed': '订单已确认', 'Order': '订单', 'Orders': '订单',
+          'Products': '商品', 'Product': '商品', 'Price': '价格', 'Total': '总计',
+          'Save': '保存', 'Cancel': '取消', 'Delete': '删除', 'Edit': '编辑', 'Create': '创建',
+          'Loading...': '加载中…', 'Error': '错误', 'Success': '成功',
+        };
+        const translate = (root = document.body) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          const nodes = [];
+          let node;
+          while ((node = walker.nextNode())) nodes.push(node);
+          for (const textNode of nodes) {
+            const value = textNode.nodeValue;
+            if (!value) continue;
+            let next = value;
+            for (const [en, zh] of Object.entries(translations)) {
+              if (next.trim() === en) next = value.replace(en, zh);
+            }
+            if (next !== value) textNode.nodeValue = next;
+          }
+          for (const el of root.querySelectorAll('input,textarea,button,[aria-label]')) {
+            for (const attr of ['placeholder', 'aria-label', 'title']) {
+              const value = el.getAttribute(attr);
+              if (value && translations[value]) el.setAttribute(attr, translations[value]);
+            }
+          }
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => translate());
+        else translate();
+        new MutationObserver((records) => {
+          for (const record of records) {
+            for (const node of record.addedNodes) if (node instanceof HTMLElement) translate(node);
+          }
+        }).observe(document.body, { childList: true, subtree: true });
+      })();
     </script>
   </body>
 </html>
