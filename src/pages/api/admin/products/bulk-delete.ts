@@ -10,19 +10,7 @@ export const prerender = false;
 
 const MAX_BULK_DELETE = 30;
 
-function safeReturnTo(value: FormDataEntryValue | null, referer: string | null): string {
-  const candidate = String(value ?? '').trim();
-  if (candidate.startsWith('/admin/products')) return candidate;
-  if (referer) {
-    try {
-      const url = new URL(referer);
-      if (url.origin === new URL('https://placeholder.invalid').origin) return '/admin/products';
-    } catch {}
-  }
-  return '/admin/products';
-}
-
-function safeReturnToFromRequest(value: FormDataEntryValue | null, request: Request): string {
+function safeReturnTo(value: FormDataEntryValue | null, request: Request): string {
   const candidate = String(value ?? '').trim();
   if (candidate.startsWith('/admin/products')) return candidate;
   const referer = request.headers.get('referer');
@@ -41,7 +29,7 @@ function withMessage(path: string, key: string, value: string | number): string 
 
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
-  const fallback = safeReturnToFromRequest(form.get('return_to'), request);
+  const fallback = safeReturnTo(form.get('return_to'), request);
   const rawIds = form.getAll('ids').map((value) => String(value).trim()).filter(Boolean);
   const publicIds = [...new Set(rawIds)];
 
