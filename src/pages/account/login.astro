@@ -1,6 +1,5 @@
 ---
 export const prerender = false;
-import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
 import {
   accountsEnabled,
@@ -8,21 +7,20 @@ import {
   isValidEmail,
   getCustomerEmail,
 } from '../../features/auth/customer';
+import { env } from 'cloudflare:workers';
 import { verifyConfiguredTurnstile, TURNSTILE_FIELD } from '../../features/auth/turnstile';
 import { getSecret } from '../../features/secrets/store';
 import Turnstile from '../../features/auth/Turnstile.astro';
 
 if (!(await accountsEnabled())) return Astro.redirect('/', 303);
-// Already signed in → account.
 if (await getCustomerEmail(Astro.cookies)) return Astro.redirect('/account', 303);
 
 let sent = false;
-let error = Astro.url.searchParams.get('error') === 'expired' ? 'That link expired — request a new one.' : '';
+let error = Astro.url.searchParams.get('error') === 'expired' ? '登录链接已过期，请重新获取。' : '';
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const email = String(form.get('email') ?? '');
-  // Bot challenge (if enabled in Settings → Bot protection): verify with the vault secret.
   const turnstileEnabled = Astro.locals.settings?.turnstileEnabled === true;
   const tsSecret = turnstileEnabled
     ? await getSecret(env.DB, 'turnstile_secret_key')
@@ -34,9 +32,9 @@ if (Astro.request.method === 'POST') {
     Astro.request.headers.get('CF-Connecting-IP'),
   );
   if (!tsOk) {
-    error = 'Verification failed — please try again.';
+    error = '验证失败，请重试。';
   } else if (!isValidEmail(email)) {
-    error = 'Enter a valid email address.';
+    error = '请输入有效的邮箱地址。';
   } else {
     await requestLogin(email, Astro.url.origin);
     sent = true;
@@ -44,20 +42,19 @@ if (Astro.request.method === 'POST') {
 }
 ---
 
-<Layout title="Sign in">
+<Layout title="登录">
   <div class="mx-auto max-w-sm py-10">
-    <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">Sign in</h1>
+    <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">登录</h1>
 
     {
       sent ? (
         <p class="rounded-md border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Check your email — we sent a one-time sign-in link. It expires in 15 minutes.
+          请检查您的邮箱，我们已发送一次性登录链接。链接有效期为 15 分钟。
         </p>
       ) : (
         <Fragment>
           <p class="mb-5 text-sm text-muted">
-            Enter your email and we'll send a sign-in link — no password needed. Use the address
-            from your orders to see your order history.
+            输入您的邮箱，我们会发送登录链接，无需密码。请使用下单时填写的邮箱，以查看您的订单记录。
           </p>
           {error && (
             <p class="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -71,7 +68,7 @@ if (Astro.request.method === 'POST') {
               required
               autofocus
               autocomplete="email"
-              placeholder="you@example.com"
+              placeholder="请输入邮箱，例如 you@example.com"
               class="w-full rounded-md border border-line px-3 py-2"
             />
             <div class="flex justify-center">
@@ -81,7 +78,7 @@ if (Astro.request.method === 'POST') {
               type="submit"
               class="w-full rounded-md bg-brand px-4 py-2.5 font-medium text-on-brand hover:bg-brand-hover"
             >
-              Send sign-in link
+              发送登录链接
             </button>
           </form>
         </Fragment>
