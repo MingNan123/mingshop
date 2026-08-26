@@ -10,44 +10,49 @@ export const prerender = false;
 
 const MAX_BULK_DELETE = 30;
 
-function safeReturnTo(value: FormDataEntryValue | null): string {
+function safeReturnTo(value: FormDataEntryValue | null, referer: string | null): string {
   const candidate = String(value ?? '').trim();
-  return candidate.startsWith('/admin/products') ? candidate : '/admin/products';
+  if (candidate.startsWith('/admin/products')) return candidate;
+  if (referer) {
+    try {
+      const url = new URL(referer);
+      if (url.origin === new URL('https://placeholder.invalid').origin) return '/admin/products';
+    } catch {}
+  }
+  return '/admin/products';
+}
+
+function safeReturnToFromRequest(value: FormDataEntryValue | null, request: Request): string {
+  const candidate = String(value ?? '').trim();
+  if (candidate.startsWith('/admin/products')) return candidate;
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try {
+      const url = new URL(referer);
+      if (url.pathname.startsWith('/admin/products')) return `${url.pathname}${url.search}`;
+    } catch {}
+  }
+  return '/admin/products';
 }
 
 function withMessage(path: string, key: string, value: string | number): string {
   return `${path}${path.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(String(value))}`;
 }
 
-/**
- * POST /api/admin/products/bulk-delete
- *
- * Accepts product public IDs only. The database mutation is performed as one
- * D1 batch after every requested ID has been validated and resolved. Search
- * indexes and catalog/product caches are cleaned after the database succeeds.
- */
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
-  const fallback = safeReturnTo(form.get('return_to'));
+  const fallback = safeReturnToFromRequest(form.get('return_to'), request);
   const rawIds = form.getAll('ids').map((value) => String(value).trim()).filter(Boolean);
   const publicIds = [...new Set(rawIds)];
 
-  if (publicIds.length === 0) {
-    return redirect(withMessage(fallback, 'error', '请至少选择一个商品。'), 303);
-  }
-  if (publicIds.length > MAX_BULK_DELETE) {
-    return redirect(withMessage(fallback, 'error', `一次最多删除 ${MAX_BULK_DELETE} 个商品，请分批操作。`), 303);
-  }
+  if (publicIds.length === 0) return redirect(withMessage(fallback, 'error', '请至少选择一个商品。'), 303);
+  if (publicIds.length > MAX_BULK_DELETE) return redirect(withMessage(fallback, 'error', `一次最多删除 ${MAX_BULK_DELETE} 个商品，请分批操作。`), 303);
 
   const products = [];
   for (const publicId of publicIds) {
-    if (!parsePublicId(publicId, 'product')) {
-      return redirect(withMessage(fallback, 'error', '商品标识无效，请刷新页面后重试。'), 303);
-    }
+    if (!parsePublicId(publicId, 'product')) return redirect(withMessage(fallback, 'error', '商品标识无效，请刷新页面后重试。'), 303);
     const product = await getProductByPublicId(env.DB, publicId);
-    if (!product) {
-      return redirect(withMessage(fallback, 'error', '部分商品不存在或已被删除，请刷新页面后重试。'), 303);
-    }
+    if (!product) return redirect(withMessage(fallback, 'error', '部分商品不存在或已被删除，请刷新页面后重试。'), 303);
     products.push(product);
   }
 
