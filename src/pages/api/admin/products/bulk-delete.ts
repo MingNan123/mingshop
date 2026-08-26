@@ -10,6 +10,15 @@ export const prerender = false;
 
 const MAX_BULK_DELETE = 30;
 
+function safeReturnTo(value: FormDataEntryValue | null): string {
+  const candidate = String(value ?? '').trim();
+  return candidate.startsWith('/admin/products') ? candidate : '/admin/products';
+}
+
+function withMessage(path: string, key: string, value: string | number): string {
+  return `${path}${path.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(String(value))}`;
+}
+
 /**
  * POST /api/admin/products/bulk-delete
  *
@@ -19,24 +28,25 @@ const MAX_BULK_DELETE = 30;
  */
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
+  const fallback = safeReturnTo(form.get('return_to'));
   const rawIds = form.getAll('ids').map((value) => String(value).trim()).filter(Boolean);
   const publicIds = [...new Set(rawIds)];
 
   if (publicIds.length === 0) {
-    return redirect('/admin/products?error=' + encodeURIComponent('请至少选择一个商品。'), 303);
+    return redirect(withMessage(fallback, 'error', '请至少选择一个商品。'), 303);
   }
   if (publicIds.length > MAX_BULK_DELETE) {
-    return redirect('/admin/products?error=' + encodeURIComponent(`一次最多删除 ${MAX_BULK_DELETE} 个商品，请分批操作。`), 303);
+    return redirect(withMessage(fallback, 'error', `一次最多删除 ${MAX_BULK_DELETE} 个商品，请分批操作。`), 303);
   }
 
   const products = [];
   for (const publicId of publicIds) {
     if (!parsePublicId(publicId, 'product')) {
-      return redirect('/admin/products?error=' + encodeURIComponent('商品标识无效，请刷新页面后重试。'), 303);
+      return redirect(withMessage(fallback, 'error', '商品标识无效，请刷新页面后重试。'), 303);
     }
     const product = await getProductByPublicId(env.DB, publicId);
     if (!product) {
-      return redirect('/admin/products?error=' + encodeURIComponent('部分商品不存在或已被删除，请刷新页面后重试。'), 303);
+      return redirect(withMessage(fallback, 'error', '部分商品不存在或已被删除，请刷新页面后重试。'), 303);
     }
     products.push(product);
   }
@@ -57,5 +67,5 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   await purgeCacheTags(tags.filter(Boolean));
 
   const warning = failedIndexes.length > 0 ? '&warning=' + encodeURIComponent('商品已删除，但部分搜索索引清理失败；搜索功能会在后续索引更新时自动修复。') : '';
-  return redirect('/admin/products?deleted=' + products.length + warning, 303);
+  return redirect(withMessage(fallback, 'deleted', products.length) + warning, 303);
 };
