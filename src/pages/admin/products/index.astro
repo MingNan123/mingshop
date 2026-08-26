@@ -9,183 +9,75 @@ import { paginate, queryHref } from '../../../pagination';
 import Pagination from '../../../components/Pagination.astro';
 import { menuReferencesFor } from '../../../features/navigation/admin';
 import FilterBar from '../../../components/FilterBar.astro';
-import {
-  parseProductFilters,
-  productFilterClause,
-  productFilterParams,
-  hasProductFilters,
-  PRODUCT_STATUS_OPTIONS,
-  PRODUCT_STOCK_OPTIONS,
-} from '../../../features/products/filter';
-
-// Auth: /admin + /api/admin are gated by src/middleware.ts. The admin password is
-// set in the first-run setup wizard (hashed in D1); Cloudflare Access at the edge
-// is the recommended production layer — see README → Admin auth.
+import { parseProductFilters, productFilterClause, productFilterParams, hasProductFilters, PRODUCT_STATUS_OPTIONS, PRODUCT_STOCK_OPTIONS } from '../../../features/products/filter';
 
 const sort = Astro.url.searchParams.get('sort');
 const dir = Astro.url.searchParams.get('dir');
 const order = orderByClause(sort, dir);
-
 const filters = parseProductFilters(Astro.url.searchParams);
-// One clause, both queries — otherwise the pager counts rows the table filtered out.
 const filterClause = productFilterClause(filters);
 const filtered = hasProductFilters(filters);
-
 const PAGE_SIZE = 30;
 const matchCount = await countAllProducts(env.DB, filterClause);
-const { page, offset, totalPages } = paginate(
-  Astro.url.searchParams,
-  matchCount,
-  PAGE_SIZE,
-);
+const { page, offset, totalPages } = paginate(Astro.url.searchParams, matchCount, PAGE_SIZE);
 const products = await listAllProducts(env.DB, PAGE_SIZE, offset, order, filterClause);
-// Bounded to this page of rows, so the nav warning costs one query, not one
-// per product.
 const menuRefs = await menuReferencesFor(env.DB, 'product', products.map((p) => p.id));
-// Sort and pagination links carry the active filters, so paging or re-sorting
-// a filtered list doesn't silently drop back to everything.
 const filterQuery = productFilterParams(filters);
-const hrefFor = (p: number) =>
-  queryHref('/admin/products', { ...filterQuery, sort, dir, page: p > 1 ? p : undefined });
-
-// Column header → sort by it, toggling direction (default asc on a new column).
-const sortHref = (col: string) =>
-  queryHref('/admin/products', {
-    ...filterQuery,
-    sort: col,
-    dir: sort === col && dir === 'asc' ? 'desc' : 'asc',
-  });
+const hrefFor = (p: number) => queryHref('/admin/products', { ...filterQuery, sort, dir, page: p > 1 ? p : undefined });
+const sortHref = (col: string) => queryHref('/admin/products', { ...filterQuery, sort: col, dir: sort === col && dir === 'asc' ? 'desc' : 'asc' });
 const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓') : '');
 ---
 
-<AdminLayout title="Products" active="products">
+<AdminLayout title="商品" active="products">
   <div class="mb-8 flex items-center justify-between">
-    <h1 class="font-serif text-3xl tracking-tight">Products</h1>
-    <a
-      href="/admin/products/new"
-      class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
-    >
-      New product
-    </a>
+    <h1 class="font-serif text-3xl tracking-tight">商品</h1>
+    <a href="/admin/products/new" class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">新建商品</a>
   </div>
 
   <FilterBar
     action="/admin/products"
     active={filtered}
     count={matchCount}
-    noun="product"
+    noun="商品"
     hidden={{ sort: sort ?? undefined, dir: dir ?? undefined }}
-    search={{ name: 'q', value: filters.q, placeholder: 'Product name' }}
+    search={{ name: 'q', value: filters.q, placeholder: '商品名称' }}
     selects={[
-      {
-        name: 'status',
-        label: 'Visibility',
-        anyLabel: 'All products',
-        value: filters.status,
-        options: PRODUCT_STATUS_OPTIONS,
-      },
-      {
-        name: 'stock',
-        label: 'Stock',
-        anyLabel: 'Any stock',
-        value: filters.stock,
-        options: PRODUCT_STOCK_OPTIONS,
-      },
+      { name: 'status', label: '显示状态', anyLabel: '全部商品', value: filters.status, options: PRODUCT_STATUS_OPTIONS },
+      { name: 'stock', label: '库存', anyLabel: '全部库存', value: filters.stock, options: PRODUCT_STOCK_OPTIONS },
     ]}
   />
 
   <div class="sm:overflow-x-auto">
     <table class="admin-table w-full text-left text-sm sm:min-w-[42rem]">
-    <thead>
-      <tr class="border-b border-line text-xs uppercase tracking-widest text-gray-400">
-        <th class="py-3 pr-4 font-normal">
-          <a href={sortHref('name')} class="hover:text-brand">Product{arrow('name')}</a>
-        </th>
-        <th class="py-3 pr-4 font-normal">
-          <a href={sortHref('price')} class="hover:text-brand">Price{arrow('price')}</a>
-        </th>
-        <th class="py-3 pr-4 font-normal">
-          <a href={sortHref('stock')} class="hover:text-brand">Stock{arrow('stock')}</a>
-        </th>
-        <th class="py-3 pr-4 font-normal">
-          <a href={sortHref('sold')} class="hover:text-brand">Sold{arrow('sold')}</a>
-        </th>
-        <th class="py-3 pr-4 font-normal">
-          <a href={sortHref('active')} class="hover:text-brand">Active{arrow('active')}</a>
-        </th>
-        <th class="py-3 text-right font-normal">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {
-        products.map((p) => (
+      <thead><tr class="border-b border-line text-xs uppercase tracking-widest text-gray-400">
+        <th class="py-3 pr-4 font-normal"><a href={sortHref('name')} class="hover:text-brand">商品{arrow('name')}</a></th>
+        <th class="py-3 pr-4 font-normal"><a href={sortHref('price')} class="hover:text-brand">价格{arrow('price')}</a></th>
+        <th class="py-3 pr-4 font-normal"><a href={sortHref('stock')} class="hover:text-brand">库存{arrow('stock')}</a></th>
+        <th class="py-3 pr-4 font-normal"><a href={sortHref('sold')} class="hover:text-brand">销量{arrow('sold')}</a></th>
+        <th class="py-3 pr-4 font-normal"><a href={sortHref('active')} class="hover:text-brand">状态{arrow('active')}</a></th>
+        <th class="py-3 text-right font-normal">操作</th>
+      </tr></thead>
+      <tbody>
+        {products.map((p) => (
           <tr class="border-b border-line">
-            <td class="py-3 pr-4">
-              <a
-                href={`/admin/products/${p.public_id}/edit`}
-                class="flex items-center gap-3 hover:text-brand"
-              >
-                <ProductImage
-                  imageKey={p.image_key}
-                  alt=""
-                  usage="thumbnail"
-                  class="h-10 w-10 rounded object-cover"
-                />
-                <span class="font-medium">{p.name}</span>
-              </a>
-            </td>
-            <td data-label="Price" class="py-3 pr-4 tabular-nums">{formatPrice(p.price_cents)}</td>
-            <td data-label="Stock" class="py-3 pr-4 tabular-nums">{p.stock}</td>
-            <td data-label="Sold" class="py-3 pr-4 tabular-nums">
-              {p.sold > 0 ? p.sold : <span class="text-gray-300">0</span>}
-            </td>
-            <td data-label="Active" class="py-3 pr-4">{p.active ? 'Yes' : <span class="text-gray-400">No</span>}</td>
-            <td data-label="" class="py-3 text-right">
-              <div class="flex justify-end gap-4 text-xs uppercase tracking-widest">
-                <a
-                  href={`/products/${p.slug}`}
-                  target="_blank"
-                  rel="noopener"
-                  class="text-gray-500 hover:text-brand"
-                >
-                  View ↗
-                </a>
-                <a href={`/admin/products/${p.public_id}/edit`} class="text-accent hover:underline">
-                  Edit
-                </a>
-                <form
-                  method="POST"
-                  action={`/api/admin/products/${p.public_id}`}
-                  onsubmit={`return confirm('${
-                    menuRefs.has(p.id)
-                      ? 'This product is linked from your navigation. Deleting it hides that link on the storefront. Continue?'
-                      : 'Delete this product?'
-                  }')`}
-                >
-                  <input type="hidden" name="_action" value="delete" />
-                  <button type="submit" class="text-red-600 hover:underline">
-                    Delete
-                  </button>
-                </form>
-              </div>
-            </td>
+            <td class="py-3 pr-4"><a href={`/admin/products/${p.public_id}/edit`} class="flex items-center gap-3 hover:text-brand"><ProductImage imageKey={p.image_key} alt="" usage="thumbnail" class="h-10 w-10 rounded object-cover" /><span class="font-medium">{p.name}</span></a></td>
+            <td data-label="价格" class="py-3 pr-4 tabular-nums">{formatPrice(p.price_cents)}</td>
+            <td data-label="库存" class="py-3 pr-4 tabular-nums">{p.stock}</td>
+            <td data-label="销量" class="py-3 pr-4 tabular-nums">{p.sold > 0 ? p.sold : <span class="text-gray-300">0</span>}</td>
+            <td data-label="状态" class="py-3 pr-4">{p.active ? '已启用' : <span class="text-gray-400">未启用</span>}</td>
+            <td data-label="操作" class="py-3 text-right"><div class="flex justify-end gap-4 text-xs uppercase tracking-widest">
+              <a href={`/products/${p.slug}`} target="_blank" rel="noopener" class="text-gray-500 hover:text-brand">查看 ↗</a>
+              <a href={`/admin/products/${p.public_id}/edit`} class="text-accent hover:underline">编辑</a>
+              <form method="POST" action={`/api/admin/products/${p.public_id}`} onsubmit={`return confirm('${menuRefs.has(p.id) ? '该商品已关联到商城导航。删除后该导航链接将在商城中隐藏。确定继续吗？' : '确定删除该商品吗？'}')`}>
+                <input type="hidden" name="_action" value="delete" />
+                <button type="submit" class="text-red-600 hover:underline">删除</button>
+              </form>
+            </div></td>
           </tr>
-        ))
-      }
-      {
-        products.length === 0 && (
-          <tr>
-            <td colspan="6" class="py-8 text-center text-gray-400">
-              {/* "No products yet" would be wrong — and confusing — when the
-                  store has plenty and the filter simply excluded them all. */}
-              {filtered ? 'No products match these filters.' : 'No products yet.'}
-            </td>
-          </tr>
-        )
-      }
-    </tbody>
+        ))}
+        {products.length === 0 && <tr><td colspan="6" class="py-8 text-center text-gray-400">{filtered ? '没有符合筛选条件的商品。' : '暂无商品。'}</td></tr>}
+      </tbody>
     </table>
   </div>
-
   <Pagination page={page} totalPages={totalPages} hrefFor={hrefFor} />
 </AdminLayout>
