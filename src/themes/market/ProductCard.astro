@@ -2,64 +2,47 @@
 import type { ProductCardModel } from '../../features/storefront/models';
 import StoreImage from '../../features/storefront/controls/StoreImage.astro';
 
-/**
- * Market — a dense catalogue tile.
- *
- * Availability is stated on every card, not only on sold-out ones: in a
- * five-across grid the shopper is comparing, and "in stock" is information they
- * would otherwise have to open a page to get. `inStock` is the only signal the
- * model exposes, deliberately — exact counts stay private.
- *
- * No reveal animation here. This design is a working tool, and staggered
- * entrances would fight the scan.
- */
 interface Props {
   card: ProductCardModel;
-  /** Accepted for contract parity with the default; this design does not
-   *  stagger, so it is unused. */
   index?: number;
   headingLevel?: 'h2' | 'h3';
 }
 
-const { card, headingLevel = 'h2' } = Astro.props;
+const { card, index = 0, headingLevel = 'h2' } = Astro.props;
 const Heading = headingLevel;
 ---
 
-<li class="flex flex-col bg-paper">
-  <!-- ONE link per card. Splitting the image and the title into two anchors
-       gives every tile a duplicate destination: keyboard users tab through it
-       twice, screen readers announce it twice, and the image-only anchor has no
-       text of its own — its name comes solely from the alt attribute, which
-       audits flag and which breaks entirely if a product ever renders without
-       one. -->
-  <a href={card.href} class="group flex flex-1 flex-col gap-2 p-2.5 pb-3">
-    <div class="relative aspect-square overflow-hidden bg-[color:var(--market-surface)]">
+<li class="market-hover market-reveal overflow-hidden rounded-[28px] bg-[color:var(--market-surface)]" style={`animation-delay:${Math.min(index, 8) * 55}ms`}>
+  <a href={card.href} class="group flex h-full flex-col p-4 sm:p-5">
+    <div class="relative mb-5 aspect-[4/3] overflow-hidden rounded-[22px] bg-white">
       <StoreImage
         image={card.image}
         fade
-        class={`aspect-square w-full object-cover${card.inStock ? '' : ' opacity-50'}`}
+        class={`h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.035]${card.inStock ? '' : ' opacity-50'}`}
       />
-      {
-        !card.inStock && (
-          <span class="absolute left-1.5 top-1.5 bg-gray-900 px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-white">
-            Sold out
-          </span>
-        )
-      }
+      <div class="absolute left-4 top-4 flex flex-wrap gap-2">
+        {card.billingInterval === 'month' && (
+          <span class="rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--color-ink)] shadow-sm backdrop-blur">每月订阅</span>
+        )}
+        {!card.inStock && (
+          <span class="rounded-full bg-[color:var(--color-ink)] px-3 py-1.5 text-[11px] font-semibold text-white">暂时售罄</span>
+        )}
+      </div>
     </div>
 
-    <Heading class="line-clamp-2 text-[13px] font-semibold leading-snug group-hover:text-brand">
-      {card.name}
-    </Heading>
+    <div class="flex flex-1 flex-col px-1 pb-1">
+      <Heading class="text-xl font-semibold tracking-[-0.025em] text-[color:var(--color-ink)] transition-colors group-hover:text-[color:var(--color-brand)] sm:text-2xl">
+        {card.name}
+      </Heading>
+      <p class="mt-2 line-clamp-2 text-[13px] leading-6 text-[color:var(--market-muted)]">{card.description ?? '数字化效率工具，开箱即用。'}</p>
 
-    <div class="mt-auto flex items-center justify-between gap-2">
-      <span class="font-serif text-[15px] font-bold tabular-nums">{card.formattedPrice}</span>
-      <span
-        class="text-[10px] font-bold uppercase tracking-wide"
-        style={`color:${card.inStock ? 'var(--market-stock-in)' : 'var(--market-muted)'}`}
-      >
-        {card.inStock ? 'In stock' : 'Out'}
-      </span>
+      <div class="mt-auto flex items-end justify-between gap-3 pt-6">
+        <div>
+          <span class="text-2xl font-semibold tracking-[-0.035em]">{card.formattedPrice}</span>
+          {card.billingInterval === 'month' && <span class="ml-1 text-[12px] text-[color:var(--market-muted)]">/ 月</span>}
+        </div>
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-ink)] text-white transition group-hover:bg-[color:var(--color-brand)]" aria-hidden="true">→</span>
+      </div>
     </div>
   </a>
 </li>
