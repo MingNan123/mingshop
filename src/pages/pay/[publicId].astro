@@ -15,12 +15,6 @@ import {
   settleLightningOnLoad,
 } from '../../features/payments/checkout/settle';
 
-// Single "complete your payment" entry point for the self-rendered rails. The
-// URL carries the guest access token for new checkouts (resolved through the
-// registry) or a legacy public id for pre-cutover ones — a bare ord_ public ID
-// never grants access. The method is read from the stored pending payment (its
-// `backend`), so there's one URL and one source of truth. Hosted providers
-// (Stripe/OpenNode) never reach here; they hand off to their own pages.
 const guestParam = Astro.params.publicId;
 let orderPublicId: string | null = null;
 if (guestParam && isAccessToken(guestParam)) {
@@ -29,43 +23,31 @@ if (guestParam && isAccessToken(guestParam)) {
 } else if (guestParam && isLegacyPublicId(guestParam)) {
   orderPublicId = guestParam;
 }
-if (!orderPublicId) return new Response('Not found', { status: 404 });
+if (!orderPublicId) return new Response('未找到订单', { status: 404 });
 
-// Capability URL: never cache, never leak in referrers.
 Astro.response.headers.set('cache-control', 'private, no-store');
 Astro.response.headers.set('referrer-policy', 'no-referrer');
 
-// STATUS-FIRST: a settled order redirects to /order/<same guest param>
-// unconditionally — even when the original pending payment has expired.
-// Expiry gates only the unpaid flow below.
 if (await getOrderByPublicId(env.DB, orderPublicId)) {
   return Astro.redirect(`/order/${guestParam}`, 303);
 }
 
 const pending = await getPendingByPublicId(env.DB, orderPublicId);
-if (!pending) return new Response('Not found', { status: 404 });
+if (!pending) return new Response('未找到订单', { status: 404 });
 
 const isDemo = pending.backend === 'demo';
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
-// An unexpected backend landing here → just show the order page.
 if (!isDemo && !isLightning) return Astro.redirect(`/order/${guestParam}`, 303);
 
-// Every self-rendered pending payment now carries an expiry (Lightning: the
-// invoice's; Demo: 24h). Past it, the unpaid flow fails closed — no rendering
-// the payment UI, no settlement POST.
 const payExpired =
   pending.status === 'expired' ||
   (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now());
 
-// The execution context lets the confirmation emails finish after the redirect
-// — settlement commits the outbox rows with the order, delivery follows behind.
 const ctx = Astro.locals.cfContext;
 const waitUntil = ctx ? ctx.waitUntil.bind(ctx) : undefined;
 
 let declined: string | null = null;
 if (isDemo && Astro.request.method === 'POST' && !payExpired) {
-  // Middleware already loaded the settings overlay for this document — hand it
-  // down so settlement doesn't re-read it (and the three keys it derives).
   const result = await settleDemoCheckout(
     pending,
     await Astro.request.formData(),
@@ -73,7 +55,6 @@ if (isDemo && Astro.request.method === 'POST' && !payExpired) {
     Astro.locals.settings,
     waitUntil,
   );
-  // Settled → the order page, addressed by the SAME guest param (token or legacy).
   if (result.settled) return Astro.redirect(`/order/${guestParam}`, 303);
   declined = result.declined ?? null;
 }
@@ -86,23 +67,20 @@ if (
   return Astro.redirect(`/order/${guestParam}`, 303);
 }
 
-// Past its window (Lightning: the BOLT11's expiry; Demo: 24h) the unpaid flow is
-// terminal — render an "expired" state instead of the payment UI, so an
-// abandoned tab can't poll forever and an expired demo can't settle.
 const lightningExpired = isLightning && payExpired;
 
 const { storeName } = getConfig();
-const title = isDemo ? 'Demo checkout' : 'Pay with Lightning';
+const title = isDemo ? '模拟支付' : '使用闪电网络支付';
 const description = isDemo
-  ? `Simulated checkout for ${storeName}.`
-  : `Pay ${storeName} with Bitcoin Lightning.`;
+  ? `${storeName} 的模拟支付页面。`
+  : `使用比特币闪电网络向 ${storeName} 支付。`;
 ---
 
 <Layout title={title} description={description}>
   {isDemo && payExpired && (
     <Fragment>
-      <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">Checkout expired</h1>
-      <p class="text-muted">This demo checkout has expired. Please start a new one.</p>
+      <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">支付已过期</h1>
+      <p class="text-muted">本次模拟支付已过期，请重新发起订单。</p>
     </Fragment>
   )}
   {isDemo && !payExpired && <DemoCheckout pending={pending} declined={declined} />}
