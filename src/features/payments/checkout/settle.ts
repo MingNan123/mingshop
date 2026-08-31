@@ -21,6 +21,8 @@ export async function settleDemoCheckout(): Promise<PaymentSettleResult> {
   return { declined: 'Demo checkout has been removed.' };
 }
 
+/** Manual confirmation is intentionally limited to Alipay/WeChat.
+ * USDC/USDT may only settle from verified chain data in stablecoin-watcher.ts. */
 export async function settleManualWalletCheckout(
   pending: PendingPayment,
   form: FormData,
@@ -31,16 +33,13 @@ export async function settleManualWalletCheckout(
   if (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now()) {
     return { declined: 'This payment request has expired.' };
   }
-  if (!['alipay', 'wechatpay', 'usdc', 'usdt'].includes(pending.backend)) {
-    return { declined: 'This payment method is not supported.' };
-  }
-  if ((pending.backend === 'usdc' || pending.backend === 'usdt') && pending.currency.toLowerCase() !== 'usd') {
-    return { declined: 'Stablecoin checkout requires the store currency to be USD.' };
+  if (!['alipay', 'wechatpay'].includes(pending.backend)) {
+    return { declined: 'This payment method requires automatic verification.' };
   }
   const email = resolveRequiredOrderEmail(String(form.get('email') ?? ''), pending.email);
   if (!email) return { declined: 'A valid email is required.' };
   const proof = String(form.get('proof') ?? '').trim().slice(0, 200);
-  if (!proof) return { declined: 'Enter the payment reference or transaction hash.' };
+  if (!proof) return { declined: 'Enter the payment reference.' };
   const order = { ...pendingToPaidOrder(pending), email, providerPaymentId: proof };
   await recordPaidWebhookOrder(
     { type: `${pending.backend}.confirmed`, order }, origin, pending.backend, settings, waitUntil,
