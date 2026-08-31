@@ -89,6 +89,7 @@ async function pendingCandidates(db: D1Database, method: StablecoinMethod): Prom
   const { results } = await db.prepare(
     `SELECT * FROM pending_payments
      WHERE backend = ? AND status = 'pending' AND lower(currency) = 'usd'
+       AND email IS NOT NULL AND trim(email) <> ''
        AND (expires_at IS NULL OR expires_at > datetime('now'))
      ORDER BY created_at ASC LIMIT 100`,
   ).bind(method).all<PendingPayment>();
