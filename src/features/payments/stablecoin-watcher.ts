@@ -12,6 +12,7 @@ const INITIAL_LOOKBACK_BLOCKS = 2_000n;
 const MAX_BLOCK_SPAN = 1_000n;
 const TRON_CURSOR_OVERLAP_MS = 30 * 60 * 1000;
 const TRON_MAX_PAGES_PER_SWEEP = 20;
+const TRONGRID_HOSTS = new Set(['api.trongrid.io', 'api.shasta.trongrid.io', 'nile.trongrid.io']);
 
 type RpcLog = {
   transactionHash: string;
@@ -107,7 +108,7 @@ async function loadEvmWatchConfig(db: D1Database, method: StablecoinMethod): Pro
 
 async function loadTronWatchConfig(db: D1Database): Promise<TronWatchConfig | null> {
   if (await stablecoinMode(db, 'usdt') !== 'tron') return null;
-  const [baseUrlRaw, tokenAddress, decimalsRaw, receiveAddress, apiKey] = await Promise.all([
+  const [baseUrlRaw, tokenAddress, decimalsRaw, receiveAddress, storedApiKey] = await Promise.all([
     readSetting(db, 'stablecoin_usdt_tron_base_url'),
     readSetting(db, 'stablecoin_usdt_tron_token_address'),
     readSetting(db, 'stablecoin_usdt_decimals'),
@@ -121,7 +122,10 @@ async function loadTronWatchConfig(db: D1Database): Promise<TronWatchConfig | nu
   if (!Number.isInteger(decimals) || decimals < 2 || decimals > 18) return null;
   let host = '';
   try { host = new URL(baseUrl).host.toLowerCase(); } catch { return null; }
-  if (host === 'api.trongrid.io' && !apiKey) return null;
+  const isOfficialTronGrid = TRONGRID_HOSTS.has(host);
+  if (host === 'api.trongrid.io' && !storedApiKey) return null;
+  // Never forward the encrypted TronGrid credential to an arbitrary custom indexer.
+  const apiKey = isOfficialTronGrid ? storedApiKey : null;
   return { baseUrl, tokenAddress, receiveAddress, decimals, apiKey };
 }
 
@@ -241,8 +245,9 @@ async function fetchTronPage(
 async function scanTronUsdt(db: D1Database, config: TronWatchConfig, origin: string): Promise<void> {
   const pending = await pendingCandidates(db, 'usdt');
   if (pending.length === 0) return;
-  const oldestCreated = Math.min(...pending.map((p) => Date.parse(p.created_at)).filter(Number.isFinite));
-  if (!Number.isFinite(oldestCreated)) return;
+  const times = pending.map((p) => Date.parse(p.created_at)).filter((value) => Number.isFinite(value));
+  if (times.length === 0) return;
+  const oldestCreated = Math.min(...times);
   const cursorRaw = await readSetting(db, 'stablecoin_usdt_tron_cursor_ms');
   const cursor = cursorRaw ? Number(cursorRaw) : NaN;
   const earliestOrder = oldestCreated - 120_000;
@@ -275,8 +280,8 @@ async function scanTronUsdt(db: D1Database, config: TronWatchConfig, origin: str
     pageCount += 1;
   } while (fingerprint && pageCount < TRON_MAX_PAGES_PER_SWEEP);
 
-  // Keep a large overlap so indexing delays cannot make us miss a confirmed transfer.
-  // Tx-hash idempotency makes rescanning the overlap harmless.
+  // Rescan 30 minutes on the next pass so a temporarily delayed index record is
+  // still observed. Transaction-hash idempotency makes this overlap harmless.
   await writeSetting(
     db,
     'stablecoin_usdt_tron_cursor_ms',
