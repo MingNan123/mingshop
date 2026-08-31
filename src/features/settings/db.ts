@@ -53,19 +53,32 @@ export async function getStoreSettings(db: D1Database): Promise<StoreSettings> {
 }
 export function parseStoreSettings(results: Array<{ key: string; value: string }>): StoreSettings {
   const map = new Map((results ?? []).map((r) => [r.key, r.value]));
-  const autoReady = (coin: 'usdc' | 'usdt') => {
+  const configuredSecrets = (results ?? []).filter((r) => r.key.startsWith('enc:') && r.value).map((r) => r.key.slice(4));
+  const secretSet = new Set(configuredSecrets);
+  const evmReady = (coin: 'usdc' | 'usdt') => {
     const rpc = map.get(`stablecoin_${coin}_rpc_url`) ?? '';
     const token = map.get(`stablecoin_${coin}_token_address`) ?? '';
     const receive = map.get(`${coin}_address`) ?? '';
     return /^https:\/\//i.test(rpc) && /^0x[0-9a-fA-F]{40}$/.test(token) && /^0x[0-9a-fA-F]{40}$/.test(receive);
   };
+  const tronReady = () => {
+    const base = map.get('stablecoin_usdt_tron_base_url') ?? 'https://api.trongrid.io';
+    const token = map.get('stablecoin_usdt_tron_token_address') ?? '';
+    const receive = map.get('usdt_address') ?? '';
+    const tronAddress = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
+    let host = '';
+    try { host = new URL(base).host.toLowerCase(); } catch { return false; }
+    const needsKey = host === 'api.trongrid.io';
+    return /^https:\/\//i.test(base) && tronAddress.test(token) && tronAddress.test(receive) && (!needsKey || secretSet.has('trongrid_api_key'));
+  };
+  const usdtMode = map.get('stablecoin_usdt_mode') === 'tron' ? 'tron' : 'evm';
   return {
     setupComplete: map.get('setup_complete') === '1', storeName: map.get('store_name') ?? null,
     timeZone: normalizeTimeZone(map.get('time_zone')), stripeWebhookSecret: map.get('stripe_webhook_secret') ?? null,
     disabledPaymentMethods: (map.get('payment_methods_disabled') ?? '').split(',').map((s) => s.trim()).filter((s) => s && s !== 'demo'),
     cartEnabled: map.get('cart_enabled') !== '0', buyNowEnabled: map.get('buy_now_enabled') !== '0',
     searchProvider: map.get('search_provider') === 'vector' ? 'vector' : map.get('search_provider') === 'fts' ? 'fts' : null,
-    configuredSecrets: (results ?? []).filter((r) => r.key.startsWith('enc:') && r.value).map((r) => r.key.slice(4)),
+    configuredSecrets,
     emailEnabled: map.get('email_enabled') !== '0', emailProvider: map.get('email_provider') === 'cloudflare' ? 'cloudflare' : 'resend',
     logoImageKey: map.get('logo_image_key') ?? null, homePage: map.get('home_page') ?? null, announcement: map.get('announcement') ?? null,
     announcementHref: map.get('announcement_href') ?? null, emailFrom: map.get('email_from') ?? null, emailFromName: map.get('email_from_name') ?? null,
@@ -81,7 +94,7 @@ export function parseStoreSettings(results: Array<{ key: string; value: string }
     alipayPaymentUrl: map.get('alipay_payment_url') ?? null, wechatpayPaymentUrl: map.get('wechatpay_payment_url') ?? null,
     usdcAddress: map.get('usdc_address') ?? null, usdcNetwork: map.get('usdc_network') ?? null,
     usdtAddress: map.get('usdt_address') ?? null, usdtNetwork: map.get('usdt_network') ?? null,
-    usdcAutoVerifyReady: autoReady('usdc'), usdtAutoVerifyReady: autoReady('usdt'),
+    usdcAutoVerifyReady: evmReady('usdc'), usdtAutoVerifyReady: usdtMode === 'tron' ? tronReady() : evmReady('usdt'),
   };
 }
 export async function setFeatureEnabled(db: D1Database, key: FeatureKey, enabled: boolean): Promise<void> { await setSetting(db, key, enabled ? null : '0'); }
