@@ -58,6 +58,8 @@ export interface StorefrontPaginationModel {
 export interface CatalogPageModel {
   eyebrow: string;
   heading: string;
+  /** Bare catalog path used for the "all products" destination. */
+  allHref?: string;
   categories: StorefrontLink[];
   products: ProductCardModel[];
   sort: StorefrontSortModel;
