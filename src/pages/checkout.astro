@@ -28,7 +28,7 @@ const fld = (name: string) => (form?.get(name) ?? '').toString().trim();
 
 // Rails that need the shop's own address/shipping step. Their charge amount is
 // rebuilt here from the current D1 product/variant/extra rows; no posted amount is accepted.
-const IN_APP_RAILS = ['lightning', 'opennode', 'alipay', 'wechatpay', 'usdc'] as const;
+const IN_APP_RAILS = ['lightning', 'opennode', 'alipay', 'wechatpay', 'usdc', 'usdt'] as const;
 type InAppRail = (typeof IN_APP_RAILS)[number];
 const requestedRail = (fld('method') || Astro.url.searchParams.get('method') || '').trim();
 if (!(IN_APP_RAILS as readonly string[]).includes(requestedRail)) return Astro.redirect('/cart', 303);
@@ -105,6 +105,7 @@ const RAIL_LABEL: Record<InAppRail, string> = {
   alipay: 'Pay with Alipay',
   wechatpay: 'Pay with WeChat Pay',
   usdc: 'Pay with USDC',
+  usdt: 'Pay with USDT',
 };
 const addr = {
   email: fld('email'), name: fld('name'), line1: fld('line1'), line2: fld('line2'), city: fld('city'), state: fld('state'), postal: fld('postal'),
@@ -138,7 +139,7 @@ if (isPost) {
         if (!chosen) errors.push('Please choose a shipping option.');
         else {
           const { publicId, accessToken } = await claimOrderIdentity(env.DB);
-          const reservationTtl = rail === 'alipay' || rail === 'wechatpay' || rail === 'usdc'
+          const reservationTtl = rail === 'alipay' || rail === 'wechatpay' || rail === 'usdc' || rail === 'usdt'
             ? MANUAL_WALLET_CHECKOUT_TTL_SECONDS
             : cfg.payments.lightning.invoiceExpiryMinutes * 60 + 5 * 60;
           const reserved = await reserveInventory(env.DB, publicId, reservationItems(lines), reservationTtl, rail, purgeStockProductCache);
