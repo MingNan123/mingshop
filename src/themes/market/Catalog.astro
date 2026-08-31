@@ -46,7 +46,7 @@ const categoryIcon = (slug: string) => {
 
   <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center">
     <nav aria-label="商品分类" class="market-category-nav flex min-w-0 flex-wrap gap-2 overflow-x-auto pb-1">
-      <a href={Astro.url.pathname} class={`${chip} border-[color:var(--color-ink)] bg-[color:var(--color-ink)] text-white`}>
+      <a href={model.allHref ?? '/'} class={`${chip} border-[color:var(--color-ink)] bg-[color:var(--color-ink)] text-white`}>
         全部商品
       </a>
       {model.categories.map((category) => (
