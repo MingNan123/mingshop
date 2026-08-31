@@ -22,6 +22,9 @@ export function createManualWalletProvider(
 ): PaymentProvider {
   return {
     async createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult> {
+      if (params.shipping && !params.selectedShipping) {
+        throw new Error(`${method} checkout requires the in-app shipping step before payment.`);
+      }
       const subtotal = params.lineItems.reduce((s, li) => s + li.amountCents * li.quantity, 0);
       const shippingCents = params.selectedShipping?.amountCents ?? 0;
       const publicId = params.metadata?.public_id ?? crypto.randomUUID();
@@ -40,9 +43,7 @@ export function createManualWalletProvider(
         shippingLabel: params.selectedShipping?.label ?? null,
         shippingWeightGrams: params.selectedShipping?.weightGrams ?? null,
         deliveryMethod: params.selectedShipping?.deliveryMethod ?? null,
-        shipAddressJson: params.selectedShipping
-          ? JSON.stringify(params.selectedShipping.address)
-          : null,
+        shipAddressJson: params.selectedShipping ? JSON.stringify(params.selectedShipping.address) : null,
         reservationId: params.metadata?.reservation_id ?? null,
         expiresAt: new Date(Date.now() + MANUAL_WALLET_CHECKOUT_TTL_SECONDS * 1000).toISOString(),
       });
