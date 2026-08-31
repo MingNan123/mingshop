@@ -2,171 +2,148 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { getStoreSettings, setSetting } from '../../features/settings/db';
+import { getStoreSettings } from '../../features/settings/db';
 import { setSecret, vaultReady } from '../../features/secrets/store';
+import {
+  loadStablecoinProfiles,
+  parseStablecoinProfiles,
+  saveStablecoinProfiles,
+  type StablecoinNetworkProfile,
+} from '../../features/payments/stablecoin-networks';
 import { CACHE_TAG } from '../../features/cache/tags';
 import { purgeCacheTags } from '../../features/cache/purge';
 
+const SLOT_COUNT = 8;
 const TRON_USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const TRONGRID_MAINNET = 'https://api.trongrid.io';
-const getRuntime = async (key: string) => (await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>())?.value ?? '';
-const setRuntime = async (key: string, value: string) => {
-  if (!value) { await env.DB.prepare('DELETE FROM settings WHERE key = ?').bind(key).run(); return; }
-  await env.DB.prepare(`INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')`).bind(key, value).run();
-};
-const isEvmAddress = (v: string) => /^0x[0-9a-fA-F]{40}$/.test(v);
-const isTronAddress = (v: string) => /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(v);
 const before = await getStoreSettings(env.DB);
 const hadTronGridKey = before.configuredSecrets.includes('trongrid_api_key');
 
+let profiles = await loadStablecoinProfiles(env.DB);
 let saved = false;
 let error = '';
+
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const clean = (name: string) => String(form.get(name) ?? '').trim();
-  const usdcAddress = clean('usdc_address');
-  const usdcNetwork = clean('usdc_network');
-  const usdtMode = clean('usdt_mode') === 'tron' ? 'tron' : 'evm';
-  const usdtAddress = usdtMode === 'tron' ? clean('usdt_address_tron') : clean('usdt_address_evm');
-  const usdtNetwork = usdtMode === 'tron' ? 'TRON (TRC-20)' : clean('usdt_network');
+  const parsed: StablecoinNetworkProfile[] = [];
 
-  const auto = (coin: 'usdc' | 'usdt') => ({
-    rpc: clean(`${coin}_rpc_url`), token: clean(`${coin}_token_address`),
-    decimals: clean(`${coin}_decimals`) || '6', confirmations: clean(`${coin}_confirmations`) || '12',
-  });
-  const usdcAuto = auto('usdc');
-  const usdtAuto = auto('usdt');
-  const tronBaseUrl = clean('usdt_tron_base_url') || TRONGRID_MAINNET;
-  const tronTokenAddress = clean('usdt_tron_token_address') || TRON_USDT_CONTRACT;
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const prefix = `profile_${i}_`;
+    const label = clean(`${prefix}label`);
+    const receiveAddress = clean(`${prefix}receive_address`);
+    const endpoint = clean(`${prefix}endpoint`);
+    const tokenAddress = clean(`${prefix}token_address`);
+    const hasAny = !!(label || receiveAddress || endpoint || tokenAddress);
+    if (!hasAny) continue;
+
+    const candidate = {
+      id: clean(`${prefix}id`) || `network-${i + 1}`,
+      token: clean(`${prefix}token`) === 'usdc' ? 'usdc' : 'usdt',
+      label,
+      kind: clean(`${prefix}kind`) === 'tron' ? 'tron' : 'evm',
+      enabled: form.get(`${prefix}enabled`) === '1',
+      receiveAddress,
+      endpoint,
+      tokenAddress,
+      decimals: Number(clean(`${prefix}decimals`) || '6'),
+      confirmations: Number(clean(`${prefix}confirmations`) || '12'),
+    };
+    const one = parseStablecoinProfiles(JSON.stringify([candidate]));
+    if (one.length !== 1) {
+      error = `网络配置 ${i + 1} 无效：请检查币种、网络类型、HTTPS 节点、收款地址、代币合约、decimals 和确认数。`;
+      break;
+    }
+    parsed.push(one[0]);
+  }
+
   const tronGridKey = clean('trongrid_api_key');
   const clearTronGridKey = clean('clear_trongrid_api_key') === '1';
-
-  const evmError = (coin: string, cfg: ReturnType<typeof auto>, receive: string) => {
-    const any = !!(cfg.rpc || cfg.token || receive);
-    if (!any) return '';
-    if (!cfg.rpc || !cfg.token || !receive) return `${coin.toUpperCase()} EVM 自动验单需要 RPC URL、代币合约和收款地址。`;
-    if (!/^https:\/\//i.test(cfg.rpc)) return `${coin.toUpperCase()} RPC URL 必须使用 HTTPS。`;
-    if (!isEvmAddress(cfg.token) || !isEvmAddress(receive)) return `${coin.toUpperCase()} EVM 模式必须使用 0x 地址。`;
-    const d = Number(cfg.decimals), c = Number(cfg.confirmations);
-    if (!Number.isInteger(d) || d < 2 || d > 18) return `${coin.toUpperCase()} decimals 必须是 2–18 的整数。`;
-    if (!Number.isInteger(c) || c < 1 || c > 200) return `${coin.toUpperCase()} 确认数必须是 1–200 的整数。`;
-    return '';
-  };
-  const tronError = () => {
-    if (!usdtAddress) return 'TRON USDT 必须填写 TRC-20 收款地址。';
-    if (!isTronAddress(usdtAddress)) return 'TRON USDT 收款地址格式不正确，应为 T 开头的 Base58 地址。';
-    if (!isTronAddress(tronTokenAddress)) return 'TRON USDT 合约地址格式不正确。';
-    if (!/^https:\/\//i.test(tronBaseUrl)) return 'TronGrid / TRON API 地址必须使用 HTTPS。';
-    const d = Number(usdtAuto.decimals);
-    if (!Number.isInteger(d) || d < 2 || d > 18) return 'TRON USDT decimals 必须是 2–18 的整数。';
-    let host = '';
-    try { host = new URL(tronBaseUrl).host.toLowerCase(); } catch { return 'TRON API 地址无效。'; }
-    if (host === 'api.trongrid.io' && !tronGridKey && (!hadTronGridKey || clearTronGridKey)) return 'TronGrid 主网自动验单需要 API Key。';
-    if (tronGridKey && !vaultReady()) return '保存 TronGrid API Key 前需要先配置 SECRETS_KEK。';
-    return '';
-  };
-
-  if ((usdcAddress && !usdcNetwork) || (!usdcAddress && usdcNetwork)) error = 'USDC 必须同时填写收款地址和网络。';
-  else if (usdtMode === 'evm' && ((usdtAddress && !usdtNetwork) || (!usdtAddress && usdtNetwork))) error = 'USDT 必须同时填写收款地址和网络。';
-  else error = evmError('usdc', usdcAuto, usdcAddress) || (usdtMode === 'tron' ? tronError() : evmError('usdt', usdtAuto, usdtAddress));
+  if (!error) {
+    const officialTronGridNeeded = parsed.some((p) => {
+      if (!p.enabled || p.kind !== 'tron') return false;
+      try { return new URL(p.endpoint).host.toLowerCase() === 'api.trongrid.io'; } catch { return false; }
+    });
+    const willHaveKey = !clearTronGridKey && (!!tronGridKey || hadTronGridKey);
+    if (officialTronGridNeeded && !willHaveKey) error = '启用官方 TronGrid 的 TRON 网络前，需要配置 TronGrid API Key。';
+    else if ((tronGridKey || clearTronGridKey) && !vaultReady()) error = '修改 TronGrid API Key 前，需要先配置 SECRETS_KEK。';
+  }
 
   if (!error) {
     try {
-      await setSetting(env.DB, 'usdc_address', usdcAddress || null);
-      await setSetting(env.DB, 'usdc_network', usdcNetwork || null);
-      await setSetting(env.DB, 'usdt_address', usdtAddress || null);
-      await setSetting(env.DB, 'usdt_network', usdtNetwork || null);
-      await setRuntime('stablecoin_usdt_mode', usdtMode);
-      await setRuntime('stablecoin_usdt_tron_base_url', tronBaseUrl);
-      await setRuntime('stablecoin_usdt_tron_token_address', tronTokenAddress);
+      await saveStablecoinProfiles(env.DB, parsed);
       if (clearTronGridKey) await setSecret(env.DB, 'trongrid_api_key', null);
       else if (tronGridKey) await setSecret(env.DB, 'trongrid_api_key', tronGridKey);
-      for (const [coin, cfg] of [['usdc', usdcAuto], ['usdt', usdtAuto]] as const) {
-        await setRuntime(`stablecoin_${coin}_rpc_url`, cfg.rpc);
-        await setRuntime(`stablecoin_${coin}_token_address`, cfg.token);
-        await setRuntime(`stablecoin_${coin}_decimals`, (coin === 'usdt' && usdtMode === 'tron') || (cfg.rpc && cfg.token) ? cfg.decimals : '');
-        await setRuntime(`stablecoin_${coin}_confirmations`, cfg.rpc && cfg.token ? cfg.confirmations : '');
-        await setRuntime(`stablecoin_${coin}_cursor`, '');
-      }
-      await setRuntime('stablecoin_usdt_tron_cursor_ms', '');
+      // A profile may keep its ID while its chain/address changes. Reset cursors so
+      // the watcher starts from the active pending-order window on the new config.
+      await env.DB.prepare("DELETE FROM settings WHERE key LIKE 'stablecoin_cursor_%'").run();
       await purgeCacheTags([CACHE_TAG.shell, CACHE_TAG.catalog]);
+      profiles = parsed;
       saved = true;
     } catch (err) {
-      error = err instanceof Error ? err.message : '保存稳定币设置失败。';
+      error = err instanceof Error ? err.message : '保存稳定币网络失败。';
     }
   }
 }
 
 const settings = await getStoreSettings(env.DB);
-const usdtMode = (await getRuntime('stablecoin_usdt_mode')) === 'tron' ? 'tron' : 'evm';
-const runtime = {
-  usdcRpc: await getRuntime('stablecoin_usdc_rpc_url'), usdcToken: await getRuntime('stablecoin_usdc_token_address'),
-  usdcDecimals: (await getRuntime('stablecoin_usdc_decimals')) || '6', usdcConfirmations: (await getRuntime('stablecoin_usdc_confirmations')) || '12',
-  usdtRpc: await getRuntime('stablecoin_usdt_rpc_url'), usdtToken: await getRuntime('stablecoin_usdt_token_address'),
-  usdtDecimals: (await getRuntime('stablecoin_usdt_decimals')) || '6', usdtConfirmations: (await getRuntime('stablecoin_usdt_confirmations')) || '12',
-  tronBaseUrl: (await getRuntime('stablecoin_usdt_tron_base_url')) || TRONGRID_MAINNET,
-  tronToken: (await getRuntime('stablecoin_usdt_tron_token_address')) || TRON_USDT_CONTRACT,
-};
 const tronGridKeyConfigured = settings.configuredSecrets.includes('trongrid_api_key');
+const defaults: StablecoinNetworkProfile[] = [
+  { id: 'network-1', token: 'usdc', label: '', kind: 'evm', enabled: false, receiveAddress: '', endpoint: '', tokenAddress: '', decimals: 6, confirmations: 12 },
+  { id: 'network-2', token: 'usdc', label: '', kind: 'evm', enabled: false, receiveAddress: '', endpoint: '', tokenAddress: '', decimals: 6, confirmations: 12 },
+  { id: 'network-3', token: 'usdc', label: '', kind: 'evm', enabled: false, receiveAddress: '', endpoint: '', tokenAddress: '', decimals: 6, confirmations: 12 },
+  { id: 'network-4', token: 'usdt', label: 'TRON (TRC-20)', kind: 'tron', enabled: false, receiveAddress: '', endpoint: TRONGRID_MAINNET, tokenAddress: TRON_USDT_CONTRACT, decimals: 6, confirmations: 1 },
+  { id: 'network-5', token: 'usdt', label: '', kind: 'evm', enabled: false, receiveAddress: '', endpoint: '', tokenAddress: '', decimals: 6, confirmations: 12 },
+  { id: 'network-6', token: 'usdt', label: '', kind: 'evm', enabled: false, receiveAddress: '', endpoint: '', tokenAddress: '', decimals: 6, confirmations: 12 },
+  { id: 'network-7', token: 'usdt', label: '', kind: 'evm', enabled: false, receiveAddress: '', endpoint: '', tokenAddress: '', decimals: 6, confirmations: 12 },
+  { id: 'network-8', token: 'usdc', label: '', kind: 'evm', enabled: false, receiveAddress: '', endpoint: '', tokenAddress: '', decimals: 6, confirmations: 12 },
+];
+const slots = Array.from({ length: SLOT_COUNT }, (_, i) => profiles[i] ?? defaults[i]);
+const enabledUsdc = profiles.filter((p) => p.enabled && p.token === 'usdc').length;
+const enabledUsdt = profiles.filter((p) => p.enabled && p.token === 'usdt').length;
 ---
 
-<AdminLayout title="稳定币收款">
-  <div class="mx-auto max-w-3xl space-y-6">
+<AdminLayout title="稳定币网络">
+  <div class="mx-auto max-w-4xl space-y-6">
     <div>
-      <h1 class="text-2xl font-semibold">USDC / USDT 收款设置</h1>
-      <p class="mt-2 text-sm text-muted">资金直接进入你的钱包。Cloudflare Cron 每 5 分钟自动扫描链上入账，唯一匹配商品固定金额后自动完成订单。</p>
+      <h1 class="text-2xl font-semibold">USDC / USDT 网络设置</h1>
+      <p class="mt-2 text-sm text-muted">新订单只接受 USDC 和 USDT。你在这里启用可接受网络；买家付款时只能从你启用的同币种网络中选择，选定后该订单会冻结网络配置，双方始终保持一致。</p>
+      <p class="mt-2 text-xs text-muted">当前已启用：USDC {enabledUsdc} 个网络 · USDT {enabledUsdt} 个网络。</p>
     </div>
-    {saved && <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">设置已保存，自动验单会从最近链上记录开始扫描。</div>}
+
+    {saved && <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">网络设置已保存。新订单立即使用新的可选网络列表；旧待付款订单保持创建时的网络快照。</div>}
     {error && <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-    <form method="POST" class="space-y-6">
-      <section class="rounded-lg border border-line bg-surface p-5 space-y-4">
-        <div><h2 class="text-lg font-medium">USDC</h2><p class="mt-1 text-xs text-muted">当前 USDC 自动验单使用 EVM/ERC-20，可配置 Base、Polygon、Ethereum、Arbitrum 等网络。</p></div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block text-sm"><span class="mb-1 block font-medium">网络名称</span><input name="usdc_network" value={settings.usdcNetwork ?? ''} placeholder="例如 Base" class="w-full rounded-md border border-line px-3 py-2" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">收款地址</span><input name="usdc_address" value={settings.usdcAddress ?? ''} placeholder="0x..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">EVM RPC URL</span><input name="usdc_rpc_url" value={runtime.usdcRpc} placeholder="https://..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">USDC 代币合约</span><input name="usdc_token_address" value={runtime.usdcToken} placeholder="0x...（核对该网络官方合约）" class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm"><span class="mb-1 block font-medium">Decimals</span><input name="usdc_decimals" type="number" min="2" max="18" value={runtime.usdcDecimals} class="w-full rounded-md border border-line px-3 py-2" /></label>
-          <label class="block text-sm"><span class="mb-1 block font-medium">确认数</span><input name="usdc_confirmations" type="number" min="1" max="200" value={runtime.usdcConfirmations} class="w-full rounded-md border border-line px-3 py-2" /></label>
-        </div>
+    <form method="POST" class="space-y-5">
+      <section class="rounded-lg border border-line bg-surface p-5">
+        <h2 class="text-lg font-medium">TRON API Key</h2>
+        <p class="mt-1 text-xs text-muted">只有启用官方 api.trongrid.io 的 TRON 网络时需要。密钥使用项目 Secret Vault 加密保存，不会回显，也不会发送给自定义第三方 API。</p>
+        <input name="trongrid_api_key" type="password" autocomplete="new-password" placeholder={tronGridKeyConfigured ? '已配置；留空保持不变' : 'TRON-PRO-API-KEY'} class="mt-3 w-full rounded-md border border-line px-3 py-2 font-mono text-xs" />
+        {tronGridKeyConfigured && <label class="mt-2 flex items-center gap-2 text-xs text-muted"><input type="checkbox" name="clear_trongrid_api_key" value="1" />清除已保存的 TronGrid API Key</label>}
       </section>
 
-      <section class="rounded-lg border border-line bg-surface p-5 space-y-4">
-        <div><h2 class="text-lg font-medium">USDT</h2><p class="mt-1 text-xs text-muted">USDT 可选 EVM/ERC-20 或 TRON/TRC-20。切换模式后只会运行所选网络的自动监听器。</p></div>
-        <label class="block text-sm"><span class="mb-1 block font-medium">自动验单网络类型</span><select name="usdt_mode" data-usdt-mode class="w-full rounded-md border border-line px-3 py-2"><option value="tron" selected={usdtMode === 'tron'}>TRON / TRC-20（推荐用于 USDT）</option><option value="evm" selected={usdtMode === 'evm'}>EVM / ERC-20</option></select></label>
-        <label class="block text-sm"><span class="mb-1 block font-medium">USDT Decimals</span><input name="usdt_decimals" type="number" min="2" max="18" value={runtime.usdtDecimals} class="w-full rounded-md border border-line px-3 py-2" /></label>
+      {slots.map((profile, i) => (
+        <section class="rounded-lg border border-line bg-surface p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 class="text-lg font-medium">收款网络 {i + 1}</h2><p class="text-xs text-muted">买家看到的网络必须来自这里的“已启用”配置。</p></div>
+            <label class="flex items-center gap-2 text-sm font-medium"><input type="checkbox" name={`profile_${i}_enabled`} value="1" checked={profile.enabled} />启用给买家</label>
+          </div>
+          <input type="hidden" name={`profile_${i}_id`} value={profile.id} />
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block text-sm"><span class="mb-1 block font-medium">币种</span><select name={`profile_${i}_token`} class="w-full rounded-md border border-line px-3 py-2"><option value="usdt" selected={profile.token === 'usdt'}>USDT</option><option value="usdc" selected={profile.token === 'usdc'}>USDC</option></select></label>
+            <label class="block text-sm"><span class="mb-1 block font-medium">链类型</span><select name={`profile_${i}_kind`} class="w-full rounded-md border border-line px-3 py-2"><option value="evm" selected={profile.kind === 'evm'}>EVM / ERC-20</option><option value="tron" selected={profile.kind === 'tron'}>TRON / TRC-20（仅 USDT）</option></select></label>
+            <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">买家看到的网络名称</span><input name={`profile_${i}_label`} value={profile.label} placeholder="例如 Base / Polygon / TRON (TRC-20)" class="w-full rounded-md border border-line px-3 py-2" /></label>
+            <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">你的收款地址</span><input name={`profile_${i}_receive_address`} value={profile.receiveAddress} placeholder={profile.kind === 'tron' ? 'T...' : '0x...'} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
+            <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">RPC / 链上查询 API</span><input name={`profile_${i}_endpoint`} value={profile.endpoint} placeholder={profile.kind === 'tron' ? TRONGRID_MAINNET : 'https://...'} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
+            <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">该网络的官方 USDC / USDT 合约</span><input name={`profile_${i}_token_address`} value={profile.tokenAddress} placeholder={profile.kind === 'tron' ? 'T...' : '0x...'} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
+            <label class="block text-sm"><span class="mb-1 block font-medium">Decimals</span><input name={`profile_${i}_decimals`} type="number" min="2" max="18" value={profile.decimals} class="w-full rounded-md border border-line px-3 py-2" /></label>
+            <label class="block text-sm"><span class="mb-1 block font-medium">确认数</span><input name={`profile_${i}_confirmations`} type="number" min="1" max="200" value={profile.confirmations} class="w-full rounded-md border border-line px-3 py-2" /></label>
+          </div>
+        </section>
+      ))}
 
-        <div data-usdt-tron class="grid gap-4 sm:grid-cols-2">
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TRC-20 USDT 收款地址</span><input name="usdt_address_tron" value={usdtMode === 'tron' ? settings.usdtAddress ?? '' : ''} placeholder="T..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TronGrid / TRON API</span><input name="usdt_tron_base_url" value={runtime.tronBaseUrl} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TRC-20 USDT 合约</span><input name="usdt_tron_token_address" value={runtime.tronToken} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TronGrid API Key</span><input name="trongrid_api_key" type="password" autocomplete="new-password" placeholder={tronGridKeyConfigured ? '已配置；留空保持不变' : '粘贴 TRON-PRO-API-KEY'} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /><span class="mt-1 block text-xs text-muted">API Key 使用项目 Secret Vault 加密保存，不会回显。</span></label>
-          {tronGridKeyConfigured && <label class="flex items-center gap-2 text-xs text-muted sm:col-span-2"><input type="checkbox" name="clear_trongrid_api_key" value="1" />清除已保存的 TronGrid API Key</label>}
-        </div>
-
-        <div data-usdt-evm class="grid gap-4 sm:grid-cols-2">
-          <label class="block text-sm"><span class="mb-1 block font-medium">网络名称</span><input name="usdt_network" value={usdtMode === 'evm' ? settings.usdtNetwork ?? '' : ''} placeholder="例如 Ethereum / Arbitrum" class="w-full rounded-md border border-line px-3 py-2" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">EVM USDT 收款地址</span><input name="usdt_address_evm" value={usdtMode === 'evm' ? settings.usdtAddress ?? '' : ''} placeholder="0x..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">EVM RPC URL</span><input name="usdt_rpc_url" value={runtime.usdtRpc} placeholder="https://..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">USDT 代币合约</span><input name="usdt_token_address" value={runtime.usdtToken} placeholder="0x..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm"><span class="mb-1 block font-medium">确认数</span><input name="usdt_confirmations" type="number" min="1" max="200" value={runtime.usdtConfirmations} class="w-full rounded-md border border-line px-3 py-2" /></label>
-        </div>
-      </section>
-
-      <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">不要从随机网站复制代币合约地址。共享收款地址出现多个“同币种 + 同金额 + 同时待付”订单时，系统会保持待确认，不会猜测并自动交付。</div>
-      <button type="submit" class="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-hover">保存稳定币设置</button>
+      <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">只启用你已经核对过的网络、公开收款地址和官方代币合约。不要填写私钥或助记词。TRON 类型只能用于 USDT；USDC 使用 EVM 网络配置。</div>
+      <button type="submit" class="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-hover">保存可接受网络</button>
     </form>
   </div>
 </AdminLayout>
-
-<script is:inline>
-  const mode = document.querySelector('[data-usdt-mode]');
-  const sync = () => {
-    const tron = mode?.value === 'tron';
-    document.querySelector('[data-usdt-tron]')?.classList.toggle('hidden', !tron);
-    document.querySelector('[data-usdt-evm]')?.classList.toggle('hidden', !!tron);
-  };
-  mode?.addEventListener('change', sync);
-  sync();
-</script>
