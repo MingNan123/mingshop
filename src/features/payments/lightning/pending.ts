@@ -21,6 +21,7 @@ export interface PendingPayment {
   reservation_id: string | null;
   stablecoin_network_id: string | null;
   stablecoin_network_snapshot: string | null;
+  stablecoin_network_selected_at: string | null;
   status: string;
   expires_at: string | null;
   created_at: string;
@@ -106,9 +107,8 @@ export async function updatePendingEmail(
 }
 
 /**
- * Freeze the merchant-approved network chosen by the buyer. The full network
- * profile is snapshotted so later admin edits cannot redirect an already-created
- * payment request to another chain/address/contract.
+ * Freeze the merchant-approved network chosen by the buyer. The UPDATE itself is
+ * immutable: once a snapshot exists, neither UI nor a crafted POST can switch it.
  */
 export async function selectPendingStablecoinNetwork(
   db: D1Database,
@@ -125,8 +125,12 @@ export async function selectPendingStablecoinNetwork(
   }
   const result = await db.prepare(
     `UPDATE pending_payments
-        SET email = COALESCE(?, email), stablecoin_network_id = ?, stablecoin_network_snapshot = ?
-      WHERE public_id = ? AND backend = ? AND status = 'pending'`,
+        SET email = COALESCE(?, email),
+            stablecoin_network_id = ?,
+            stablecoin_network_snapshot = ?,
+            stablecoin_network_selected_at = datetime('now')
+      WHERE public_id = ? AND backend = ? AND status = 'pending'
+        AND stablecoin_network_snapshot IS NULL`,
   ).bind(normalizedEmail, profile.id, stablecoinSnapshot(profile), publicId, token).run();
   return (result.meta.changes ?? 0) > 0;
 }
