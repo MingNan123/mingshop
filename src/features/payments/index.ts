@@ -37,8 +37,8 @@ export function isMethodAvailable(method: PaymentMethod, settings: StoreSettings
     case 'opennode': return has('opennode_api_key');
     case 'alipay': return !!settings.alipayPaymentUrl;
     case 'wechatpay': return !!settings.wechatpayPaymentUrl;
-    case 'usdc': return !!settings.usdcAddress && !!settings.usdcNetwork;
-    case 'usdt': return !!settings.usdtAddress && !!settings.usdtNetwork;
+    case 'usdc': return !!settings.usdcAddress && !!settings.usdcNetwork && settings.usdcAutoVerifyReady;
+    case 'usdt': return !!settings.usdtAddress && !!settings.usdtNetwork && settings.usdtAutoVerifyReady;
     case 'lightning': return settings.lightningBackend === 'lnbits' ? !!settings.lnbitsUrl && has('lnbits_api_key') : !!settings.phoenixdUrl && has('phoenixd_password');
     case 'demo': return false;
   }
