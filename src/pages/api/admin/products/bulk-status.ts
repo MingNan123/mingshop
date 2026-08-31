@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   }
 
   await env.DB.batch(products.map((product) => env.DB.prepare('UPDATE products SET active = ? WHERE id = ?').bind(active, product.id)));
-  await Promise.all(products.map((product) => indexProduct(product.id).catch((error) => console.error('Search index (bulk status) failed:', error))));
+  await Promise.all(products.map((product) => indexProduct({ ...product, active }).catch((error) => console.error('Search index (bulk status) failed:', error))));
   await purgeCacheTags([CACHE_TAG.catalog, ...products.map((product) => CACHE_TAG.product(product.public_id ?? '')).filter(Boolean)]);
 
   const message = active ? `已上架 ${products.length} 个商品。` : `已下架 ${products.length} 个商品。`;
