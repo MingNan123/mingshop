@@ -1,9 +1,24 @@
 import { handle } from '@astrojs/cloudflare/handler';
 import { env } from 'cloudflare:workers';
 import { sweepStaleNotifications } from './features/email/outbox';
-import { releaseExpiredReservations } from './features/orders/reservations';
+import {
+  releaseExpiredReservations,
+  releaseInventoryReservation,
+} from './features/orders/reservations';
 import { getSetting } from './features/settings/db';
 import { sweepStablecoinPayments } from './features/payments/stablecoin-watcher';
+
+async function releaseExpiredUsdtReservations(): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT public_id FROM checkout_reservations
+     WHERE payment_method = 'usdt' AND status = 'active'
+       AND expires_at <= datetime('now')
+     ORDER BY expires_at LIMIT 50`,
+  ).all<{ public_id: string }>();
+  for (const row of results ?? []) {
+    await releaseInventoryReservation(env.DB, row.public_id);
+  }
+}
 
 async function runScheduledSweeps(): Promise<void> {
   const db = env.DB;
@@ -20,6 +35,7 @@ async function runScheduledSweeps(): Promise<void> {
   }
 
   try {
+    await releaseExpiredUsdtReservations();
     await releaseExpiredReservations(db, 50);
   } catch (err) {
     console.error('Scheduled reservation sweep failed:', err);
