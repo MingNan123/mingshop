@@ -3,87 +3,44 @@ export const prerender = false;
 import Layout from '../layouts/Layout.astro';
 
 const method = (Astro.url.searchParams.get('method') ?? '').toLowerCase();
-const origin = Astro.url.origin;
 
 interface Guide {
   title: string;
   intro: string;
   steps: string[];
 }
+
 const GUIDES: Record<string, Guide> = {
-  stripe: {
-    title: 'Set up card payments (Stripe)',
-    intro: 'Accept Visa, Mastercard, Apple Pay and more via Stripe Checkout.',
-    steps: [
-      'Create a Stripe account and grab your Secret key from dashboard.stripe.com/apikeys.',
-      'Paste it in Admin → Settings → Payment keys (Stripe secret key). It’s stored encrypted in your database.',
-      `Add a webhook endpoint in Stripe pointing at ${origin}/api/webhook/stripe (events: checkout.session.completed, checkout.session.async_payment_succeeded, and charge.refunded).`,
-      'Paste the signing secret into Payment keys. Product prices are read from the shop database when checkout starts.',
-    ],
-  },
-  lightning: {
-    title: 'Set up Lightning payments',
-    intro: 'Take instant Bitcoin Lightning payments from any wallet.',
-    steps: [
-      'Stand up an LNbits instance (or a phoenixd node).',
-      'In Admin → Settings → Payments, pick the node (LNbits or phoenixd).',
-      'Enter the node URL and key. Lightning invoices are minted from the same fixed product/order amount used by the other payment methods.',
-    ],
-  },
-  opennode: {
-    title: 'Set up Bitcoin payments (OpenNode)',
-    intro: 'Hosted on-chain + Lightning checkout via OpenNode.',
-    steps: [
-      'Create an OpenNode account and an API key.',
-      'Paste it in Admin → Settings → Payment keys (OpenNode API key).',
-      `Point its webhook at ${origin}/api/webhook/opennode. The checkout amount is generated from the product prices stored by the shop.`,
-    ],
-  },
-  alipay: {
-    title: 'Set up Alipay direct payments',
-    intro: 'Accept Alipay using your own collection link while the shop locks the order amount to product pricing.',
-    steps: [
-      'Create or copy an Alipay merchant/personal collection link.',
-      'Paste it in Admin → Settings → Payments → Alipay payment URL.',
-      'Set each product’s fixed price in Admin → Products. The Alipay payment page will display that server-calculated amount (plus selected options/shipping) and buyers cannot edit it in checkout.',
-    ],
-  },
-  wechatpay: {
-    title: 'Set up WeChat Pay direct payments',
-    intro: 'Accept WeChat Pay with your own collection link while the shop locks the order amount to product pricing.',
-    steps: [
-      'Create or copy a WeChat Pay collection link.',
-      'Paste it in Admin → Settings → Payments → WeChat Pay payment URL.',
-      'Set each product’s fixed price in Admin → Products. The WeChat Pay page will display the server-calculated amount (plus selected options/shipping) and buyers cannot edit it in checkout.',
-    ],
-  },
   usdc: {
-    title: 'Set up USDC automatic payments',
-    intro: 'Receive USDC directly to your own EVM wallet and let Cloudflare confirm the ERC-20 transfer automatically.',
+    title: '配置 USDC 自动收款',
+    intro: '商家可以启用多个 USDC 网络；买家付款时只能从你启用的网络中选择，并在订单上永久锁定该网络。',
     steps: [
-      'Keep the store currency set to USD. Stablecoin checkout is hidden when the store uses another currency.',
-      'Open Admin → Stablecoins and choose an EVM network such as Base, Polygon, Ethereum, or Arbitrum.',
-      'Enter your 0x receiving address, a trusted HTTPS RPC URL, the official USDC token contract for that exact network, its decimals, and the required confirmation count.',
-      'After a customer pays, the existing Cloudflare Cron scans confirmed Transfer logs and verifies token contract, destination address, exact order amount, transaction uniqueness, and order time window before creating the paid order.',
+      '店铺币种保持为 USD，然后打开「后台 → 稳定币收款」。',
+      '新增一个或多个 USDC 网络配置，填写网络名称、收款地址、可信 HTTPS RPC、该网络官方 USDC 合约、Decimals 和确认数。',
+      '只勾选你实际愿意接收的网络。买家结账时只会看到这些已启用的 USDC 网络。',
+      '买家锁定网络后，订单会保存该网络的收款地址、代币合约、RPC、Decimals 和确认规则快照，之后不能换链。',
+      'Cloudflare Cron 仅按照订单锁定的网络扫描链上转账，并核对合约、收款地址、精确金额、时间窗口、确认数和交易哈希唯一性后自动完成订单。',
     ],
   },
   usdt: {
-    title: 'Set up USDT automatic payments',
-    intro: 'Receive USDT directly to your own wallet using either TRON/TRC-20 or EVM/ERC-20 automatic verification.',
+    title: '配置 USDT 自动收款',
+    intro: 'USDT 支持商家启用多个网络；买家从同一组已启用网络中选择，订单锁定后双方网络保持一致。',
     steps: [
-      'Keep the store currency set to USD and open Admin → Stablecoins.',
-      'For TRON, choose TRON / TRC-20, enter your T-address, keep or verify the official TRC-20 USDT contract, and add a TronGrid API Key. The key is encrypted in the Secret Vault.',
-      'For EVM, choose EVM / ERC-20 and enter the network, 0x receiving address, trusted HTTPS RPC URL, official USDT token contract, decimals, and confirmation count.',
-      'Cloudflare Cron checks confirmed incoming transfers and only auto-completes a uniquely matched order when token, receiving address, exact amount, time window, and transaction uniqueness all pass.',
+      '店铺币种保持为 USD，然后打开「后台 → 稳定币收款」。',
+      'TRON / TRC-20：填写 T 地址、可信 TronGrid/兼容索引器、官方 USDT 合约和确认规则；使用官方 TronGrid 时可在 Secret Vault 保存 API Key。',
+      'EVM / ERC-20：填写网络名称、0x 收款地址、可信 HTTPS RPC、该网络官方 USDT 合约、Decimals 和确认数。',
+      '可以同时启用多个 USDT 网络。买家只能从你启用的网络中选择，不能提交任意网络名称。',
+      '买家锁定网络后，该订单的网络快照不可更改；自动验单也只扫描这个订单对应的网络，避免跨链错配。',
     ],
   },
 };
+
 const guide = GUIDES[method] ?? null;
 ---
 
-<Layout title="Set up payments" description="How to enable a payment method.">
+<Layout title="稳定币收款设置" description="配置 USDC / USDT 固定金额与多网络自动验单。">
   <div class="mx-auto max-w-xl py-8">
-    <a href="/cart" class="text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Back to cart</a>
+    <a href="/cart" class="text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; 返回购物车</a>
     {guide ? (
       <>
         <h1 class="mt-4 font-serif text-3xl tracking-tight">{guide.title}</h1>
@@ -99,13 +56,13 @@ const guide = GUIDES[method] ?? null;
       </>
     ) : (
       <>
-        <h1 class="mt-4 font-serif text-3xl tracking-tight">Set up payments</h1>
-        <p class="mt-3 text-muted">This payment method isn't configured. Configure a real payment method in Admin → Settings → Payments before accepting orders.</p>
+        <h1 class="mt-4 font-serif text-3xl tracking-tight">仅支持 USDC / USDT</h1>
+        <p class="mt-3 text-muted">新的结账订单只接受 USDC 和 USDT。请在「后台 → 稳定币收款」中配置并启用至少一个对应网络。</p>
       </>
     )}
 
     <div class="mt-8 rounded-md border border-line bg-surface px-4 py-3 text-sm text-muted">
-      All payment methods use product prices resolved by the server at checkout. No demo checkout or simulated order path is offered.
+      应付金额始终由服务器根据商品、选项和运费计算。买家选择的稳定币网络会写入订单快照并锁定，付款币种、网络和商家收款配置必须保持一致。
     </div>
   </div>
 </Layout>
