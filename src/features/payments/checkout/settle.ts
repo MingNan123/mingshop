@@ -17,6 +17,14 @@ export interface PaymentSettleResult {
   declined?: string | null;
 }
 
+/**
+ * Deprecated compatibility export for older tests/callers. Demo checkout has
+ * been removed, so this function can never turn a demo payment into an order.
+ */
+export async function settleDemoCheckout(): Promise<PaymentSettleResult> {
+  return { declined: 'Demo checkout has been removed.' };
+}
+
 export async function settleManualWalletCheckout(
   pending: PendingPayment,
   form: FormData,
