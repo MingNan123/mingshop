@@ -40,6 +40,10 @@ export function createManualWalletProvider(
 ): PaymentProvider {
   return {
     async createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult> {
+      const currency = (params.lineItems[0]?.currency ?? 'usd').toLowerCase();
+      if ((method === 'usdc' || method === 'usdt') && currency !== 'usd') {
+        throw new Error(`${method.toUpperCase()} checkout requires the store currency to be USD.`);
+      }
       if (params.shipping && !params.selectedShipping) {
         throw new Error(`${method} checkout requires the in-app shipping step before payment.`);
       }
@@ -62,7 +66,7 @@ export function createManualWalletProvider(
         bolt11: null,
         amountSat: null,
         amountTotalCents: subtotal + shippingCents,
-        currency: params.lineItems[0]?.currency ?? 'usd',
+        currency,
         email: params.selectedShipping?.email ?? null,
         itemsJson: params.orderItemsJson ?? null,
         shippingCents,
