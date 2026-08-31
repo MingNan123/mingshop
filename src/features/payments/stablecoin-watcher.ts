@@ -3,16 +3,19 @@ import { pendingToPaidOrder, type PendingPayment } from './lightning/pending';
 import { recordPaidWebhookOrder } from '../orders/recordWebhook';
 import { getStoreSettings } from '../settings/db';
 import { getSecret } from '../secrets/store';
+import {
+  enabledStablecoinProfiles,
+  loadStablecoinProfiles,
+  parseStablecoinSnapshot,
+  type StablecoinNetworkProfile,
+  type StablecoinToken,
+} from './stablecoin-networks';
 
-export type StablecoinMethod = 'usdc' | 'usdt';
-
-const TRANSFER_TOPIC =
-  '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const INITIAL_LOOKBACK_BLOCKS = 2_000n;
 const MAX_BLOCK_SPAN = 1_000n;
 const TRON_CURSOR_OVERLAP_MS = 30 * 60 * 1000;
 const TRON_MAX_PAGES_PER_SWEEP = 20;
-const TRONGRID_HOSTS = new Set(['api.trongrid.io', 'api.shasta.trongrid.io', 'nile.trongrid.io']);
 
 type RpcLog = {
   transactionHash: string;
@@ -22,21 +25,6 @@ type RpcLog = {
   removed?: boolean;
 };
 type RpcBlock = { timestamp: string };
-type EvmWatchConfig = {
-  method: StablecoinMethod;
-  rpcUrl: string;
-  tokenAddress: string;
-  receiveAddress: string;
-  decimals: number;
-  confirmations: number;
-};
-type TronWatchConfig = {
-  baseUrl: string;
-  tokenAddress: string;
-  receiveAddress: string;
-  decimals: number;
-  apiKey: string | null;
-};
 type TronTrc20Transfer = {
   transaction_id?: string;
   token_info?: { address?: string; decimals?: number; symbol?: string };
@@ -51,13 +39,11 @@ type TronGridResponse = {
   data?: TronTrc20Transfer[];
   meta?: { fingerprint?: string };
 };
+type PendingNetworkGroup = {
+  profile: StablecoinNetworkProfile;
+  pending: PendingPayment[];
+};
 
-function isEvmAddress(value: string): boolean {
-  return /^0x[0-9a-fA-F]{40}$/.test(value);
-}
-function isTronBase58Address(value: string): boolean {
-  return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(value);
-}
 async function readSetting(db: D1Database, key: string): Promise<string | null> {
   const row = await db.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>();
   return row?.value ?? null;
@@ -68,7 +54,6 @@ async function writeSetting(db: D1Database, key: string, value: string): Promise
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
   ).bind(key, value).run();
 }
-
 async function rpc<T>(url: string, method: string, params: unknown[]): Promise<T> {
   const response = await fetch(url, {
     method: 'POST',
@@ -82,69 +67,41 @@ async function rpc<T>(url: string, method: string, params: unknown[]): Promise<T
   return body.result;
 }
 
-async function stablecoinMode(db: D1Database, method: StablecoinMethod): Promise<'evm' | 'tron'> {
-  if (method !== 'usdt') return 'evm';
-  return (await readSetting(db, 'stablecoin_usdt_mode')) === 'tron' ? 'tron' : 'evm';
-}
-
-async function loadEvmWatchConfig(db: D1Database, method: StablecoinMethod): Promise<EvmWatchConfig | null> {
-  if (await stablecoinMode(db, method) !== 'evm') return null;
-  const [rpcUrl, tokenAddress, decimalsRaw, confirmationsRaw, receiveAddress] = await Promise.all([
-    readSetting(db, `stablecoin_${method}_rpc_url`),
-    readSetting(db, `stablecoin_${method}_token_address`),
-    readSetting(db, `stablecoin_${method}_decimals`),
-    readSetting(db, `stablecoin_${method}_confirmations`),
-    readSetting(db, `${method}_address`),
-  ]);
-  const decimals = Number(decimalsRaw ?? '6');
-  const confirmations = Number(confirmationsRaw ?? '12');
-  if (!rpcUrl || !tokenAddress || !receiveAddress) return null;
-  if (!/^https:\/\//i.test(rpcUrl)) return null;
-  if (!isEvmAddress(tokenAddress) || !isEvmAddress(receiveAddress)) return null;
-  if (!Number.isInteger(decimals) || decimals < 2 || decimals > 18) return null;
-  if (!Number.isInteger(confirmations) || confirmations < 1 || confirmations > 200) return null;
-  return { method, rpcUrl, tokenAddress, receiveAddress, decimals, confirmations };
-}
-
-async function loadTronWatchConfig(db: D1Database): Promise<TronWatchConfig | null> {
-  if (await stablecoinMode(db, 'usdt') !== 'tron') return null;
-  const [baseUrlRaw, tokenAddress, decimalsRaw, receiveAddress, storedApiKey] = await Promise.all([
-    readSetting(db, 'stablecoin_usdt_tron_base_url'),
-    readSetting(db, 'stablecoin_usdt_tron_token_address'),
-    readSetting(db, 'stablecoin_usdt_decimals'),
-    readSetting(db, 'usdt_address'),
-    getSecret(db, 'trongrid_api_key'),
-  ]);
-  const baseUrl = (baseUrlRaw || 'https://api.trongrid.io').replace(/\/+$/, '');
-  const decimals = Number(decimalsRaw ?? '6');
-  if (!/^https:\/\//i.test(baseUrl) || !tokenAddress || !receiveAddress) return null;
-  if (!isTronBase58Address(tokenAddress) || !isTronBase58Address(receiveAddress)) return null;
-  if (!Number.isInteger(decimals) || decimals < 2 || decimals > 18) return null;
-  let host = '';
-  try { host = new URL(baseUrl).host.toLowerCase(); } catch { return null; }
-  const isOfficialTronGrid = TRONGRID_HOSTS.has(host);
-  if (host === 'api.trongrid.io' && !storedApiKey) return null;
-  // Never forward the encrypted TronGrid credential to an arbitrary custom indexer.
-  const apiKey = isOfficialTronGrid ? storedApiKey : null;
-  return { baseUrl, tokenAddress, receiveAddress, decimals, apiKey };
-}
-
-function toTopicAddress(address: string): string {
-  return `0x${address.toLowerCase().slice(2).padStart(64, '0')}`;
-}
 function expectedUnits(amountCents: number, decimals: number): bigint {
   return BigInt(amountCents) * 10n ** BigInt(decimals - 2);
 }
-async function pendingCandidates(db: D1Database, method: StablecoinMethod): Promise<PendingPayment[]> {
+function toTopicAddress(address: string): string {
+  return `0x${address.toLowerCase().slice(2).padStart(64, '0')}`;
+}
+function profileCursorKey(profile: StablecoinNetworkProfile): string {
+  let host = 'endpoint';
+  try { host = new URL(profile.endpoint).host.toLowerCase(); } catch {}
+  const safe = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-14) || 'x';
+  return `stablecoin_cursor_${profile.kind}_${safe(profile.id)}_${safe(host)}_${safe(profile.receiveAddress)}_${safe(profile.tokenAddress)}`;
+}
+
+async function pendingNetworkGroups(db: D1Database): Promise<PendingNetworkGroup[]> {
   const { results } = await db.prepare(
     `SELECT * FROM pending_payments
-     WHERE backend = ? AND status = 'pending' AND lower(currency) = 'usd'
-       AND email IS NOT NULL AND trim(email) <> ''
-       AND (expires_at IS NULL OR expires_at > datetime('now'))
-     ORDER BY created_at ASC LIMIT 100`,
-  ).bind(method).all<PendingPayment>();
-  return results ?? [];
+      WHERE backend IN ('usdc','usdt') AND status = 'pending' AND lower(currency) = 'usd'
+        AND email IS NOT NULL AND trim(email) <> ''
+        AND stablecoin_network_snapshot IS NOT NULL
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+      ORDER BY created_at ASC LIMIT 250`,
+  ).all<PendingPayment>();
+
+  const groups = new Map<string, PendingNetworkGroup>();
+  for (const pending of results ?? []) {
+    const profile = parseStablecoinSnapshot(pending.stablecoin_network_snapshot);
+    if (!profile || profile.token !== pending.backend) continue;
+    const key = pending.stablecoin_network_snapshot!;
+    const current = groups.get(key);
+    if (current) current.pending.push(pending);
+    else groups.set(key, { profile, pending: [pending] });
+  }
+  return [...groups.values()];
 }
+
 async function txAlreadyUsed(db: D1Database, txHash: string): Promise<boolean> {
   const row = await db.prepare(
     'SELECT id FROM orders WHERE lower(provider_payment_id) = lower(?) LIMIT 1',
@@ -154,165 +111,190 @@ async function txAlreadyUsed(db: D1Database, txHash: string): Promise<boolean> {
 
 async function settleMatchingTransfer(
   db: D1Database,
-  method: StablecoinMethod,
+  group: PendingNetworkGroup,
   txHash: string,
   value: bigint,
-  decimals: number,
   paidAt: number,
   origin: string,
 ): Promise<boolean> {
   if (await txAlreadyUsed(db, txHash)) return false;
-  const pending = await pendingCandidates(db, method);
-  const amountMatches = pending.filter((p) => expectedUnits(p.amount_total_cents, decimals) === value);
+  const amountMatches = group.pending.filter((p) => expectedUnits(p.amount_total_cents, group.profile.decimals) === value);
   if (amountMatches.length === 0) return false;
   const eligible = amountMatches.filter((p) => {
-    const createdAt = Date.parse(p.created_at);
+    const selectedAt = Date.parse(p.stablecoin_network_selected_at || p.created_at);
     const expiresAt = p.expires_at ? Date.parse(p.expires_at) : Number.POSITIVE_INFINITY;
-    return Number.isFinite(createdAt) && paidAt >= createdAt - 120_000 && paidAt <= expiresAt;
+    return Number.isFinite(selectedAt) && paidAt >= selectedAt - 120_000 && paidAt <= expiresAt;
   });
   if (eligible.length !== 1) {
     if (eligible.length > 1) {
-      console.warn(JSON.stringify({ event: 'stablecoin_ambiguous_payment', method, tx: txHash, matches: eligible.map((p) => p.public_id) }));
+      console.warn(JSON.stringify({
+        event: 'stablecoin_ambiguous_payment',
+        token: group.profile.token,
+        network: group.profile.id,
+        tx: txHash,
+        matches: eligible.map((p) => p.public_id),
+      }));
     }
     return false;
   }
-  const p = eligible[0];
+
+  const pending = eligible[0];
   const settings = await getStoreSettings(db);
-  const order = { ...pendingToPaidOrder(p), providerPaymentId: txHash };
-  await recordPaidWebhookOrder({ type: `${method}.chain_confirmed`, order }, origin, method, settings);
-  console.log(JSON.stringify({ event: 'stablecoin_payment_settled', method, order: p.public_id, tx: txHash }));
+  const order = { ...pendingToPaidOrder(pending), providerPaymentId: txHash };
+  await recordPaidWebhookOrder(
+    { type: `${group.profile.token}.${group.profile.kind}.chain_confirmed`, order },
+    origin,
+    group.profile.token,
+    settings,
+  );
+  console.log(JSON.stringify({
+    event: 'stablecoin_payment_settled',
+    token: group.profile.token,
+    network: group.profile.id,
+    order: pending.public_id,
+    tx: txHash,
+  }));
   return true;
 }
 
-async function blockTimestampMs(config: EvmWatchConfig, blockHex: string): Promise<number> {
-  const block = await rpc<RpcBlock>(config.rpcUrl, 'eth_getBlockByNumber', [blockHex, false]);
+async function blockTimestampMs(profile: StablecoinNetworkProfile, blockHex: string): Promise<number> {
+  const block = await rpc<RpcBlock>(profile.endpoint, 'eth_getBlockByNumber', [blockHex, false]);
   return Number(BigInt(block.timestamp)) * 1000;
 }
-async function settleEvmLog(db: D1Database, config: EvmWatchConfig, log: RpcLog, origin: string): Promise<boolean> {
-  if (log.removed || !/^0x[0-9a-fA-F]{64}$/.test(log.transactionHash)) return false;
-  let value: bigint;
-  try { value = BigInt(log.data); } catch { return false; }
-  const paidAt = await blockTimestampMs(config, log.blockNumber);
-  return settleMatchingTransfer(db, config.method, log.transactionHash, value, config.decimals, paidAt, origin);
-}
-async function scanEvmMethod(db: D1Database, config: EvmWatchConfig, origin: string): Promise<void> {
-  const latestHex = await rpc<string>(config.rpcUrl, 'eth_blockNumber', []);
+
+async function scanEvmGroup(db: D1Database, group: PendingNetworkGroup, origin: string): Promise<void> {
+  const profile = group.profile;
+  const latestHex = await rpc<string>(profile.endpoint, 'eth_blockNumber', []);
   const latest = BigInt(latestHex);
-  const safeHead = latest >= BigInt(config.confirmations - 1) ? latest - BigInt(config.confirmations - 1) : 0n;
-  const cursorKey = `stablecoin_${config.method}_cursor`;
+  const safeHead = latest >= BigInt(profile.confirmations - 1)
+    ? latest - BigInt(profile.confirmations - 1)
+    : 0n;
+  const cursorKey = profileCursorKey(profile);
   const cursorRaw = await readSetting(db, cursorKey);
   let from = cursorRaw ? BigInt(cursorRaw) + 1n : (safeHead > INITIAL_LOOKBACK_BLOCKS ? safeHead - INITIAL_LOOKBACK_BLOCKS : 0n);
   if (from > safeHead) return;
-  const recipientTopic = toTopicAddress(config.receiveAddress);
+
+  const recipientTopic = toTopicAddress(profile.receiveAddress);
   while (from <= safeHead) {
     const to = from + MAX_BLOCK_SPAN - 1n < safeHead ? from + MAX_BLOCK_SPAN - 1n : safeHead;
-    const logs = await rpc<RpcLog[]>(config.rpcUrl, 'eth_getLogs', [{
+    const logs = await rpc<RpcLog[]>(profile.endpoint, 'eth_getLogs', [{
       fromBlock: `0x${from.toString(16)}`,
       toBlock: `0x${to.toString(16)}`,
-      address: config.tokenAddress,
+      address: profile.tokenAddress,
       topics: [TRANSFER_TOPIC, null, recipientTopic],
     }]);
-    for (const log of logs) await settleEvmLog(db, config, log, origin);
+    for (const log of logs) {
+      if (log.removed || !/^0x[0-9a-fA-F]{64}$/.test(log.transactionHash)) continue;
+      let value: bigint;
+      try { value = BigInt(log.data); } catch { continue; }
+      const paidAt = await blockTimestampMs(profile, log.blockNumber);
+      await settleMatchingTransfer(db, group, log.transactionHash, value, paidAt, origin);
+    }
     await writeSetting(db, cursorKey, to.toString());
     from = to + 1n;
   }
 }
 
 async function fetchTronPage(
-  config: TronWatchConfig,
+  profile: StablecoinNetworkProfile,
+  apiKey: string | null,
   minTimestamp: number,
   maxTimestamp: number,
   fingerprint?: string,
 ): Promise<TronGridResponse> {
-  const url = new URL(`/v1/accounts/${encodeURIComponent(config.receiveAddress)}/transactions/trc20`, `${config.baseUrl}/`);
+  const url = new URL(`/v1/accounts/${encodeURIComponent(profile.receiveAddress)}/transactions/trc20`, `${profile.endpoint.replace(/\/+$/, '')}/`);
   url.searchParams.set('only_confirmed', 'true');
   url.searchParams.set('only_to', 'true');
   url.searchParams.set('limit', '200');
   url.searchParams.set('order_by', 'block_timestamp,asc');
   url.searchParams.set('min_timestamp', String(Math.max(0, Math.floor(minTimestamp))));
   url.searchParams.set('max_timestamp', String(Math.max(0, Math.floor(maxTimestamp))));
-  url.searchParams.set('contract_address', config.tokenAddress);
+  url.searchParams.set('contract_address', profile.tokenAddress);
   if (fingerprint) url.searchParams.set('fingerprint', fingerprint);
+
   const headers: Record<string, string> = { accept: 'application/json' };
-  if (config.apiKey) headers['TRON-PRO-API-KEY'] = config.apiKey;
+  const official = new URL(profile.endpoint).host.toLowerCase() === 'api.trongrid.io';
+  if (official && apiKey) headers['TRON-PRO-API-KEY'] = apiKey;
   const response = await fetch(url.toString(), { headers });
-  if (!response.ok) throw new Error(`TronGrid HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`TRON API HTTP ${response.status}`);
   const body = await response.json() as TronGridResponse;
-  if (body.success === false) throw new Error('TronGrid returned success=false');
+  if (body.success === false) throw new Error('TRON API returned success=false');
   return body;
 }
 
-async function scanTronUsdt(db: D1Database, config: TronWatchConfig, origin: string): Promise<void> {
-  const pending = await pendingCandidates(db, 'usdt');
-  if (pending.length === 0) return;
-  const times = pending.map((p) => Date.parse(p.created_at)).filter((value) => Number.isFinite(value));
-  if (times.length === 0) return;
-  const oldestCreated = Math.min(...times);
-  const cursorRaw = await readSetting(db, 'stablecoin_usdt_tron_cursor_ms');
+async function scanTronGroup(db: D1Database, group: PendingNetworkGroup, origin: string): Promise<void> {
+  const profile = group.profile;
+  const official = new URL(profile.endpoint).host.toLowerCase() === 'api.trongrid.io';
+  const apiKey = official ? await getSecret(db, 'trongrid_api_key') : null;
+  if (official && !apiKey) throw new Error('Official TronGrid network snapshot requires a configured API key.');
+
+  const selectionTimes = group.pending
+    .map((p) => Date.parse(p.stablecoin_network_selected_at || p.created_at))
+    .filter(Number.isFinite);
+  if (selectionTimes.length === 0) return;
+  const earliestSelection = Math.min(...selectionTimes) - 120_000;
+  const cursorKey = profileCursorKey(profile);
+  const cursorRaw = await readSetting(db, cursorKey);
   const cursor = cursorRaw ? Number(cursorRaw) : NaN;
-  const earliestOrder = oldestCreated - 120_000;
-  const minTimestamp = Number.isFinite(cursor) ? Math.max(earliestOrder, cursor - TRON_CURSOR_OVERLAP_MS) : earliestOrder;
+  const minTimestamp = Number.isFinite(cursor)
+    ? Math.max(earliestSelection, cursor - TRON_CURSOR_OVERLAP_MS)
+    : earliestSelection;
   const maxTimestamp = Date.now();
   let fingerprint: string | undefined;
   let pageCount = 0;
   let maxSeen = minTimestamp;
 
   do {
-    const body = await fetchTronPage(config, minTimestamp, maxTimestamp, fingerprint);
+    const body = await fetchTronPage(profile, apiKey, minTimestamp, maxTimestamp, fingerprint);
     for (const transfer of body.data ?? []) {
       const tx = transfer.transaction_id ?? '';
       const paidAt = Number(transfer.block_timestamp ?? 0);
       if (!/^[0-9a-fA-F]{64}$/.test(tx) || !Number.isFinite(paidAt) || paidAt <= 0) continue;
       if (transfer.type && transfer.type !== 'Transfer') continue;
-      if (transfer.to !== config.receiveAddress) continue;
-      if (transfer.token_info?.address && transfer.token_info.address !== config.tokenAddress) continue;
-      const tokenDecimals = Number(transfer.token_info?.decimals ?? config.decimals);
-      if (tokenDecimals !== config.decimals) {
-        console.warn(JSON.stringify({ event: 'stablecoin_tron_decimals_mismatch', tx, configured: config.decimals, observed: tokenDecimals }));
+      if (transfer.to !== profile.receiveAddress) continue;
+      if (transfer.token_info?.address && transfer.token_info.address !== profile.tokenAddress) continue;
+      const observedDecimals = Number(transfer.token_info?.decimals ?? profile.decimals);
+      if (observedDecimals !== profile.decimals) {
+        console.warn(JSON.stringify({ event: 'stablecoin_tron_decimals_mismatch', network: profile.id, tx, configured: profile.decimals, observed: observedDecimals }));
         continue;
       }
       let value: bigint;
       try { value = BigInt(transfer.value ?? ''); } catch { continue; }
-      await settleMatchingTransfer(db, 'usdt', tx, value, config.decimals, paidAt, origin);
+      await settleMatchingTransfer(db, group, tx, value, paidAt, origin);
       if (paidAt > maxSeen) maxSeen = paidAt;
     }
     fingerprint = body.meta?.fingerprint || undefined;
     pageCount += 1;
   } while (fingerprint && pageCount < TRON_MAX_PAGES_PER_SWEEP);
 
-  // Rescan 30 minutes on the next pass so a temporarily delayed index record is
-  // still observed. Transaction-hash idempotency makes this overlap harmless.
-  await writeSetting(
-    db,
-    'stablecoin_usdt_tron_cursor_ms',
-    String(fingerprint ? Math.max(minTimestamp, maxSeen) : maxTimestamp),
-  );
+  // Keep overlap to tolerate delayed indexing. Tx-hash idempotency makes repeat
+  // reads harmless. If pagination remains, advance only to the newest processed row.
+  await writeSetting(db, cursorKey, String(fingerprint ? Math.max(minTimestamp, maxSeen) : maxTimestamp));
 }
 
-/** Auto-settle confirmed USDC/USDT transfers on configured networks. */
+/**
+ * Auto-settle each pending order only on the network snapshot the buyer selected
+ * from the merchant-approved list. Current admin settings never redirect an old
+ * pending payment to a different chain or address.
+ */
 export async function sweepStablecoinPayments(db: D1Database, origin: string): Promise<void> {
-  try {
-    const usdc = await loadEvmWatchConfig(db, 'usdc');
-    if (usdc) await scanEvmMethod(db, usdc, origin);
-  } catch (err) {
-    console.error('Scheduled USDC chain sweep failed:', err);
-  }
-  try {
-    const mode = await stablecoinMode(db, 'usdt');
-    if (mode === 'tron') {
-      const tron = await loadTronWatchConfig(db);
-      if (tron) await scanTronUsdt(db, tron, origin);
-    } else {
-      const usdt = await loadEvmWatchConfig(db, 'usdt');
-      if (usdt) await scanEvmMethod(db, usdt, origin);
+  const groups = await pendingNetworkGroups(db);
+  for (const group of groups) {
+    try {
+      if (group.profile.kind === 'tron') await scanTronGroup(db, group, origin);
+      else await scanEvmGroup(db, group, origin);
+    } catch (err) {
+      console.error(`Scheduled ${group.profile.token.toUpperCase()} ${group.profile.label} sweep failed:`, err);
     }
-  } catch (err) {
-    console.error('Scheduled USDT chain sweep failed:', err);
   }
 }
 
-/** Used by admin/tests to determine whether automatic verification is configured. */
-export async function stablecoinAutoVerifyConfigured(db: D1Database, method: StablecoinMethod): Promise<boolean> {
-  if (method === 'usdt' && await stablecoinMode(db, method) === 'tron') return !!(await loadTronWatchConfig(db));
-  return !!(await loadEvmWatchConfig(db, method));
+export async function stablecoinAutoVerifyConfigured(db: D1Database, method: StablecoinToken): Promise<boolean> {
+  const profiles = enabledStablecoinProfiles(await loadStablecoinProfiles(db), method);
+  for (const profile of profiles) {
+    if (profile.kind !== 'tron') return true;
+    const official = new URL(profile.endpoint).host.toLowerCase() === 'api.trongrid.io';
+    if (!official || await getSecret(db, 'trongrid_api_key')) return true;
+  }
+  return false;
 }
