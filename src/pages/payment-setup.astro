@@ -58,12 +58,23 @@ const GUIDES: Record<string, Guide> = {
     ],
   },
   usdc: {
-    title: 'Set up USDC direct payments',
-    intro: 'Accept USDC transfers to your own wallet using the same shop-calculated order amount.',
+    title: 'Set up USDC automatic payments',
+    intro: 'Receive USDC directly to your own EVM wallet and let Cloudflare confirm the ERC-20 transfer automatically.',
     steps: [
-      'Choose a network your customers can use, such as Polygon, Base, Ethereum, or Solana.',
-      'Paste the USDC receiving address and network in Admin → Settings → Payments.',
-      'Set product prices in Admin → Products. The payment request displays the server-calculated fixed order amount and asks the buyer for the transaction hash/reference.',
+      'Keep the store currency set to USD. Stablecoin checkout is hidden when the store uses another currency.',
+      'Open Admin → Stablecoins and choose an EVM network such as Base, Polygon, Ethereum, or Arbitrum.',
+      'Enter your 0x receiving address, a trusted HTTPS RPC URL, the official USDC token contract for that exact network, its decimals, and the required confirmation count.',
+      'After a customer pays, the existing Cloudflare Cron scans confirmed Transfer logs and verifies token contract, destination address, exact order amount, transaction uniqueness, and order time window before creating the paid order.',
+    ],
+  },
+  usdt: {
+    title: 'Set up USDT automatic payments',
+    intro: 'Receive ERC-20 USDT directly to your own EVM wallet and automatically confirm matching payments on-chain.',
+    steps: [
+      'Keep the store currency set to USD.',
+      'Open Admin → Stablecoins and choose an EVM/ERC-20 network. TRON/TRC-20 and Solana are not handled by this EVM verifier.',
+      'Enter your 0x receiving address, a trusted HTTPS RPC URL, the official USDT token contract for that exact network, its decimals, and the required confirmation count.',
+      'The Cloudflare Cron verifies confirmed Transfer logs and only auto-completes an order when the token, receiving address, exact amount, time window, and transaction uniqueness all match safely.',
     ],
   },
 };
