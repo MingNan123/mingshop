@@ -7,7 +7,7 @@ import type {
 } from './provider';
 import { createPendingPayment } from './lightning/pending';
 
-export type ManualWalletMethod = 'alipay' | 'wechatpay' | 'usdc';
+export type ManualWalletMethod = 'alipay' | 'wechatpay' | 'usdc' | 'usdt';
 
 export const MANUAL_WALLET_CHECKOUT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
