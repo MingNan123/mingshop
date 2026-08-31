@@ -25,19 +25,15 @@ if (!orderPublicId) return new Response('未找到订单', { status: 404 });
 
 Astro.response.headers.set('cache-control', 'private, no-store');
 Astro.response.headers.set('referrer-policy', 'no-referrer');
-
 if (await getOrderByPublicId(env.DB, orderPublicId)) return Astro.redirect(`/order/${guestParam}`, 303);
 
 const pending = await getPendingByPublicId(env.DB, orderPublicId);
 if (!pending) return new Response('未找到订单', { status: 404 });
 const settings = Astro.locals.settings ?? (await getStoreSettings(env.DB));
-
-// Legacy demo sessions are intentionally no longer payable. Existing settled demo
-// orders still remain in order history, but new/demo pending sessions cannot settle.
 if (pending.backend === 'demo') return new Response('演示结账已停用，请重新选择真实支付方式。', { status: 410 });
 
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
-const isManualWallet = pending.backend === 'alipay' || pending.backend === 'wechatpay' || pending.backend === 'usdc';
+const isManualWallet = ['alipay','wechatpay','usdc','usdt'].includes(pending.backend);
 if (!isLightning && !isManualWallet) return Astro.redirect(`/order/${guestParam}`, 303);
 
 const payExpired = pending.status === 'expired' || (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now());
@@ -50,7 +46,6 @@ if (isManualWallet && Astro.request.method === 'POST' && !payExpired) {
   if (result.settled) return Astro.redirect(`/order/${guestParam}`, 303);
   declined = result.declined ?? null;
 }
-
 if (isLightning && !payExpired && (await settleLightningOnLoad(pending, Astro.url.origin, settings, waitUntil))) {
   return Astro.redirect(`/order/${guestParam}`, 303);
 }
