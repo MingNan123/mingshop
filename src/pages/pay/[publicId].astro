@@ -4,7 +4,7 @@ import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
 import { getConfig } from '../../config';
 import { getPendingByPublicId, selectPendingStablecoinNetwork } from '../../features/payments/lightning/pending';
-import { enabledStablecoinProfiles, loadStablecoinProfiles } from '../../features/payments/stablecoin-networks';
+import { enabledStablecoinProfiles, loadStablecoinProfiles, type StablecoinToken } from '../../features/payments/stablecoin-networks';
 import { getOrderByPublicId } from '../../features/orders/db';
 import { getStoreSettings } from '../../features/settings/db';
 import { isLegacyPublicId } from '../../features/ids/publicId.ts';
@@ -35,18 +35,19 @@ if (pending.backend === 'demo') return new Response('演示结账已停用，请
 
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
 const isManualWallet = ['alipay','wechatpay','usdc','usdt'].includes(pending.backend);
-const isStablecoin = pending.backend === 'usdc' || pending.backend === 'usdt';
+const stablecoinToken: StablecoinToken | null = pending.backend === 'usdc' ? 'usdc' : pending.backend === 'usdt' ? 'usdt' : null;
+const isStablecoin = stablecoinToken !== null;
 if (!isLightning && !isManualWallet) return Astro.redirect(`/order/${guestParam}`, 303);
 
-const stablecoinNetworks = isStablecoin
-  ? enabledStablecoinProfiles(await loadStablecoinProfiles(env.DB), pending.backend)
+const stablecoinNetworks = stablecoinToken
+  ? enabledStablecoinProfiles(await loadStablecoinProfiles(env.DB), stablecoinToken)
   : [];
 const payExpired = pending.status === 'expired' || (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now());
 const ctx = Astro.locals.cfContext;
 const waitUntil = ctx ? ctx.waitUntil.bind(ctx) : undefined;
 let declined: string | null = null;
 
-if (isStablecoin && Astro.request.method === 'POST' && !payExpired) {
+if (stablecoinToken && Astro.request.method === 'POST' && !payExpired) {
   if (pending.stablecoin_network_snapshot) {
     declined = '本订单的付款网络已经锁定，不能再切换网络。';
   } else {
@@ -57,7 +58,7 @@ if (isStablecoin && Astro.request.method === 'POST' && !payExpired) {
     if (!profile) declined = '请选择商家已启用的付款网络。';
     else if (!email) declined = '请输入有效的接收订单确认邮箱。';
     else {
-      const selected = await selectPendingStablecoinNetwork(env.DB, pending.public_id, pending.backend, profile, email);
+      const selected = await selectPendingStablecoinNetwork(env.DB, pending.public_id, stablecoinToken, profile, email);
       if (!selected) declined = '无法锁定付款网络，请重新选择。';
       else pending = (await getPendingByPublicId(env.DB, orderPublicId)) ?? pending;
     }
