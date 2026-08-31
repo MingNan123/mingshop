@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import type { PaymentProvider } from './provider';
 import type { StoreSettings } from '../settings/db';
 import { getStoreSettings } from '../settings/db';
+import { getConfig } from '../../config';
 import { createStripeProvider } from './stripe';
 import { createLightningProvider } from './lightning-provider';
 import { getLightningBackend } from './lightning';
@@ -31,14 +32,15 @@ export function isPaymentMethod(value: string): value is PaymentMethod {
 }
 export function isMethodAvailable(method: PaymentMethod, settings: StoreSettings, vault = vaultReady()): boolean {
   const has = (name: string) => vault && settings.configuredSecrets.includes(name);
+  const usdStore = getConfig().currency.toLowerCase() === 'usd';
   switch (method) {
     case 'stripe': return has('stripe_secret_key') && has('stripe_webhook_secret');
     case 'waffo': return isWaffoConfigured();
     case 'opennode': return has('opennode_api_key');
     case 'alipay': return !!settings.alipayPaymentUrl;
     case 'wechatpay': return !!settings.wechatpayPaymentUrl;
-    case 'usdc': return !!settings.usdcAddress && !!settings.usdcNetwork && settings.usdcAutoVerifyReady;
-    case 'usdt': return !!settings.usdtAddress && !!settings.usdtNetwork && settings.usdtAutoVerifyReady;
+    case 'usdc': return usdStore && !!settings.usdcAddress && !!settings.usdcNetwork && settings.usdcAutoVerifyReady;
+    case 'usdt': return usdStore && !!settings.usdtAddress && !!settings.usdtNetwork && settings.usdtAutoVerifyReady;
     case 'lightning': return settings.lightningBackend === 'lnbits' ? !!settings.lnbitsUrl && has('lnbits_api_key') : !!settings.phoenixdUrl && has('phoenixd_password');
     case 'demo': return false;
   }
