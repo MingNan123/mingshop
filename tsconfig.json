@@ -1,8 +1,8 @@
 {
   "extends": ["astro/tsconfigs/strict", "./tsconfig.theme.json"],
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist", "mcp", "test", "**/*.test.ts", "**/*.test.mts", "**/*.test.mjs"],
+  "exclude": ["dist", "mcp", "test", "**/*.test.ts", "**/*.test.mts", "**/*.test.mjs", "src/layouts/AdminLayout.astro"],
   "compilerOptions": {
-    "types": []
+    "types": ["@cloudflare/workers-types"]
   }
 }
