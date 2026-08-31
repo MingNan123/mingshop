@@ -5,6 +5,7 @@ import {
   type ParsedRuntimeShippingConfig,
 } from '../shipping/settings';
 import { defaultWeightUnit, isWeightUnit, type WeightUnit } from '../shipping/weight';
+import { enabledStablecoinProfiles, parseStablecoinProfiles } from '../payments/stablecoin-networks';
 
 /** Runtime settings stored in D1. */
 export type SettingKey =
@@ -55,6 +56,23 @@ export function parseStoreSettings(results: Array<{ key: string; value: string }
   const map = new Map((results ?? []).map((r) => [r.key, r.value]));
   const configuredSecrets = (results ?? []).filter((r) => r.key.startsWith('enc:') && r.value).map((r) => r.key.slice(4));
   const secretSet = new Set(configuredSecrets);
+  const networkJson = map.get('stablecoin_networks_json');
+  const profiles = parseStablecoinProfiles(networkJson);
+  const enabledProfiles = enabledStablecoinProfiles(profiles);
+  const profileReady = (coin: 'usdc' | 'usdt') => enabledProfiles.some((profile) => {
+    if (profile.token !== coin) return false;
+    if (profile.kind !== 'tron') return true;
+    try {
+      const host = new URL(profile.endpoint).host.toLowerCase();
+      return host !== 'api.trongrid.io' || secretSet.has('trongrid_api_key');
+    } catch {
+      return false;
+    }
+  });
+  const firstProfile = (coin: 'usdc' | 'usdt') => enabledProfiles.find((p) => p.token === coin) ?? null;
+
+  // Legacy single-network fallback keeps an existing installation operable until
+  // the merchant saves the new multi-network settings page once.
   const evmReady = (coin: 'usdc' | 'usdt') => {
     const rpc = map.get(`stablecoin_${coin}_rpc_url`) ?? '';
     const token = map.get(`stablecoin_${coin}_token_address`) ?? '';
@@ -72,6 +90,10 @@ export function parseStoreSettings(results: Array<{ key: string; value: string }
     return /^https:\/\//i.test(base) && tronAddress.test(token) && tronAddress.test(receive) && (!needsKey || secretSet.has('trongrid_api_key'));
   };
   const usdtMode = map.get('stablecoin_usdt_mode') === 'tron' ? 'tron' : 'evm';
+  const hasProfiles = !!networkJson;
+  const usdcProfile = firstProfile('usdc');
+  const usdtProfile = firstProfile('usdt');
+
   return {
     setupComplete: map.get('setup_complete') === '1', storeName: map.get('store_name') ?? null,
     timeZone: normalizeTimeZone(map.get('time_zone')), stripeWebhookSecret: map.get('stripe_webhook_secret') ?? null,
@@ -88,13 +110,18 @@ export function parseStoreSettings(results: Array<{ key: string; value: string }
     shippingEnabled: map.get('shipping_enabled') == null ? null : map.get('shipping_enabled') === '1', shippingConfig: parseRuntimeShippingConfig(map.get('shipping_config')),
     weightUnit: isWeightUnit(map.get('weight_unit')) ? (map.get('weight_unit') as WeightUnit) : defaultWeightUnit(normalizeTimeZone(map.get('time_zone'))),
     turnstileEnabled: map.get('turnstile_enabled') === '1', turnstileSiteKey: map.get('turnstile_site_key') ?? null,
-    paymentProvider: map.get('payment_provider') === 'waffo' ? 'waffo' : map.get('payment_provider') === 'lightning' ? 'lightning' : map.get('payment_provider') === 'opennode' ? 'opennode' : map.get('payment_provider') === 'alipay' ? 'alipay' : map.get('payment_provider') === 'wechatpay' ? 'wechatpay' : map.get('payment_provider') === 'usdc' ? 'usdc' : map.get('payment_provider') === 'usdt' ? 'usdt' : 'stripe',
+    // New checkouts intentionally default to stablecoins only. Legacy provider
+    // configuration remains readable for historical order/webhook compatibility.
+    paymentProvider: map.get('payment_provider') === 'usdc' ? 'usdc' : 'usdt',
     lightningBackend: map.get('lightning_backend') === 'lnbits' ? 'lnbits' : 'phoenixd', lnbitsUrl: map.get('lnbits_url') ?? null,
     phoenixdUrl: map.get('phoenixd_url') ?? null, opennodeApiUrl: map.get('opennode_api_url') ?? null,
     alipayPaymentUrl: map.get('alipay_payment_url') ?? null, wechatpayPaymentUrl: map.get('wechatpay_payment_url') ?? null,
-    usdcAddress: map.get('usdc_address') ?? null, usdcNetwork: map.get('usdc_network') ?? null,
-    usdtAddress: map.get('usdt_address') ?? null, usdtNetwork: map.get('usdt_network') ?? null,
-    usdcAutoVerifyReady: evmReady('usdc'), usdtAutoVerifyReady: usdtMode === 'tron' ? tronReady() : evmReady('usdt'),
+    usdcAddress: usdcProfile?.receiveAddress ?? map.get('usdc_address') ?? null,
+    usdcNetwork: usdcProfile?.label ?? map.get('usdc_network') ?? null,
+    usdtAddress: usdtProfile?.receiveAddress ?? map.get('usdt_address') ?? null,
+    usdtNetwork: usdtProfile?.label ?? map.get('usdt_network') ?? null,
+    usdcAutoVerifyReady: hasProfiles ? profileReady('usdc') : evmReady('usdc'),
+    usdtAutoVerifyReady: hasProfiles ? profileReady('usdt') : (usdtMode === 'tron' ? tronReady() : evmReady('usdt')),
   };
 }
 export async function setFeatureEnabled(db: D1Database, key: FeatureKey, enabled: boolean): Promise<void> { await setSetting(db, key, enabled ? null : '0'); }
