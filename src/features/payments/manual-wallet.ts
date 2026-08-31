@@ -5,6 +5,10 @@ import type {
   PaymentProvider,
   WebhookResult,
 } from './provider';
+import {
+  STRIPE_CHECKOUT_TTL_SECONDS,
+  RESERVATION_EXPIRY_GRACE_SECONDS,
+} from './provider';
 import { createPendingPayment } from './lightning/pending';
 
 export type ManualWalletMethod = 'alipay' | 'wechatpay' | 'usdc' | 'usdt';
@@ -59,6 +63,13 @@ export function createManualWalletProvider(
       const shippingCents = params.selectedShipping?.amountCents ?? 0;
       const publicId = params.metadata?.public_id ?? crypto.randomUUID();
       const paymentHash = `${method}_${publicId}`;
+      // checkout.ts predates USDT and gives an unshipped USDT API reservation the
+      // hosted-checkout TTL. Keep its pending row aligned until that large route is
+      // fully normalized; physical USDT and all normal in-app wallet flows retain
+      // the seven-day direct-wallet window.
+      const ttlSeconds = method === 'usdt' && !params.selectedShipping
+        ? STRIPE_CHECKOUT_TTL_SECONDS + RESERVATION_EXPIRY_GRACE_SECONDS
+        : MANUAL_WALLET_CHECKOUT_TTL_SECONDS;
       await createPendingPayment(db, {
         publicId,
         paymentHash,
@@ -75,7 +86,7 @@ export function createManualWalletProvider(
         deliveryMethod: params.selectedShipping?.deliveryMethod ?? null,
         shipAddressJson: params.selectedShipping ? JSON.stringify(params.selectedShipping.address) : null,
         reservationId: params.metadata?.reservation_id ?? null,
-        expiresAt: new Date(Date.now() + MANUAL_WALLET_CHECKOUT_TTL_SECONDS * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
       });
       return { url: new URL(`/pay/${params.accessToken ?? publicId}`, params.successUrl).href };
     },
