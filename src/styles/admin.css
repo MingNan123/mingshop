@@ -51,3 +51,37 @@
 :root {
   --minshop-css-entry: admin;
 }
+
+/*
+ * Demo checkout was removed from the runtime payment registry. Keep the old
+ * settings-page markup invisible while legacy settings/components remain in the
+ * source tree for migration compatibility; no demo control is exposed to admins.
+ */
+#payments .space-y-4 > div:has(input[name='method'][value='demo']) {
+  display: none;
+}
+
+/* Replace the legacy payment help copy with the current fixed-amount model. */
+#payments > h2 + p {
+  font-size: 0;
+}
+
+#payments > h2 + p::after {
+  content: 'Configure real payment methods below. Every rail uses the server-calculated product, option and shipping amount; buyers cannot edit the checkout amount.';
+  display: block;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #6b7280;
+}
+
+/* The old no-vault warning said Demo was the only fallback. Direct wallets do
+   not use the encrypted key vault, so replace that sentence when the warning exists. */
+#payments > p.border-amber-200.bg-amber-50 {
+  font-size: 0;
+}
+
+#payments > p.border-amber-200.bg-amber-50::after {
+  content: 'SECRETS_KEK is not set, so encrypted API-key fields are unavailable. Alipay, WeChat Pay and USDC direct collection can still be configured below; secret-backed methods require the Worker secret.';
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
