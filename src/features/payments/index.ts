@@ -23,7 +23,12 @@ export const DEMO_CHECKOUT_TTL_SECONDS = 0;
 
 export type PaymentMethod =
   | 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'alipay' | 'wechatpay' | 'usdc' | 'usdt' | 'demo';
-type ActivePaymentMethod = Exclude<PaymentMethod, 'demo'>;
+export type ActivePaymentMethod = Exclude<PaymentMethod, 'demo'>;
+/** Runtime contents are always active methods, but callers may safely probe for
+ * a legacy PaymentMethod such as `demo` with includes() and get false. */
+export interface ActivePaymentMethodList extends Array<ActivePaymentMethod> {
+  includes(searchElement: PaymentMethod, fromIndex?: number): boolean;
+}
 const ALL_METHODS: ActivePaymentMethod[] = ['stripe','waffo','lightning','opennode','alipay','wechatpay','usdc','usdt'];
 const OFFERED: ActivePaymentMethod[] = ['stripe','waffo','lightning','alipay','wechatpay','usdc','usdt'];
 
@@ -48,14 +53,16 @@ export function isMethodAvailable(method: PaymentMethod, settings: StoreSettings
 export function hasRealMethod(settings: StoreSettings, vault = vaultReady()): boolean { return ALL_METHODS.some((m) => isMethodAvailable(m, settings, vault)); }
 export function paymentsInDemoMode(_settings: StoreSettings): boolean { return false; }
 export function defaultMethod(settings: StoreSettings): ActivePaymentMethod { return settings.paymentProvider; }
-export function enabledMethods(settings: StoreSettings, vault = vaultReady()): ActivePaymentMethod[] {
+export function enabledMethods(settings: StoreSettings, vault = vaultReady()): ActivePaymentMethodList {
   const off = new Set(settings.disabledPaymentMethods); const def = defaultMethod(settings);
-  return [def, ...ALL_METHODS.filter((m) => m !== def)].filter((m) => isMethodAvailable(m, settings, vault)).filter((m) => !off.has(m));
+  return [def, ...ALL_METHODS.filter((m) => m !== def)]
+    .filter((m) => isMethodAvailable(m, settings, vault))
+    .filter((m) => !off.has(m)) as ActivePaymentMethodList;
 }
-export function offeredMethods(settings: StoreSettings, vault = vaultReady()): ActivePaymentMethod[] {
+export function offeredMethods(settings: StoreSettings, vault = vaultReady()): ActivePaymentMethodList {
   const off = new Set(settings.disabledPaymentMethods);
   const extra = ALL_METHODS.filter((m) => !OFFERED.includes(m) && isMethodAvailable(m, settings, vault));
-  return ([...OFFERED, ...extra] as ActivePaymentMethod[]).filter((m) => !off.has(m));
+  return ([...OFFERED, ...extra] as ActivePaymentMethod[]).filter((m) => !off.has(m)) as ActivePaymentMethodList;
 }
 export async function getPaymentProvider(method?: PaymentMethod): Promise<PaymentProvider> {
   const settings = await getStoreSettings(env.DB); const m = method ?? defaultMethod(settings);
