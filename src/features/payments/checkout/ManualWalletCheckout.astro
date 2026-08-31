@@ -13,40 +13,33 @@ const { pending, settings, declined = null } = Astro.props;
 
 type Snap = { id: number; q: number; n: string; p: number };
 let items: Snap[] = [];
-try {
-  items = pending.items ? (JSON.parse(pending.items) as Snap[]) : [];
-} catch {
-  items = [];
-}
+try { items = pending.items ? (JSON.parse(pending.items) as Snap[]) : []; } catch { items = []; }
 
-const CONFIG: Record<string, { title: string; label: string; target: string; hint: string; copyLabel: string }> = {
+const CONFIG: Record<string, { title: string; label: string; target: string; hint: string; copyLabel: string; token?: string }> = {
   alipay: {
-    title: '使用支付宝支付',
-    label: '支付宝收款链接',
-    target: settings.alipayPaymentUrl ?? '',
-    hint: '应付金额已由商品后台价格锁定。请严格按本页固定金额付款，并在备注中填写订单号。',
-    copyLabel: '复制链接',
+    title: '使用支付宝支付', label: '支付宝收款链接', target: settings.alipayPaymentUrl ?? '',
+    hint: '应付金额已由商品后台价格锁定。请严格按本页固定金额付款，并在备注中填写订单号。', copyLabel: '复制链接',
   },
   wechatpay: {
-    title: '使用微信支付',
-    label: '微信支付收款链接',
-    target: settings.wechatpayPaymentUrl ?? '',
-    hint: '应付金额已由商品后台价格锁定。请严格按本页固定金额付款，并在备注中填写订单号。',
-    copyLabel: '复制链接',
+    title: '使用微信支付', label: '微信支付收款链接', target: settings.wechatpayPaymentUrl ?? '',
+    hint: '应付金额已由商品后台价格锁定。请严格按本页固定金额付款，并在备注中填写订单号。', copyLabel: '复制链接',
   },
   usdc: {
-    title: '使用 USDC 支付',
-    label: `${settings.usdcNetwork ?? 'USDC'} 收款地址`,
-    target: settings.usdcAddress ?? '',
-    hint: `应付金额由商品后台价格锁定。请在 ${settings.usdcNetwork ?? 'configured'} 网络按本页固定金额发送 USDC，并提交交易哈希或付款截图编号。`,
-    copyLabel: '复制地址',
+    title: '使用 USDC 支付', label: `${settings.usdcNetwork ?? 'USDC'} 收款地址`, target: settings.usdcAddress ?? '', token: 'USDC',
+    hint: `请只通过 ${settings.usdcNetwork ?? '后台配置'} 网络发送 USDC。金额由订单锁定，转错网络可能无法找回。`, copyLabel: '复制地址',
+  },
+  usdt: {
+    title: '使用 USDT 支付', label: `${settings.usdtNetwork ?? 'USDT'} 收款地址`, target: settings.usdtAddress ?? '', token: 'USDT',
+    hint: `请只通过 ${settings.usdtNetwork ?? '后台配置'} 网络发送 USDT。金额由订单锁定，转错网络可能无法找回。`, copyLabel: '复制地址',
   },
 };
 const cfg = CONFIG[pending.backend] ?? CONFIG.usdc;
 const total = formatPrice(pending.amount_total_cents, pending.currency);
+const stablecoinAmount = pending.currency.toLowerCase() === 'usd' ? (pending.amount_total_cents / 100).toFixed(2) : null;
 const shipping = pending.shipping_cents ? formatPrice(pending.shipping_cents, pending.currency) : null;
 const orderMemo = pending.public_id;
-const qrValue = pending.backend === 'usdc' ? cfg.target : cfg.target || orderMemo;
+const isStablecoin = pending.backend === 'usdc' || pending.backend === 'usdt';
+const qrValue = isStablecoin ? cfg.target : cfg.target || orderMemo;
 const qrSvg = qrValue ? renderSVG(qrValue, { border: 2 }) : null;
 const { storeName } = getConfig();
 ---
@@ -57,18 +50,14 @@ const { storeName } = getConfig();
 
   <div class="mb-4 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-center">
     <p class="text-xs uppercase tracking-widest text-muted">固定应付金额</p>
-    <p class="mt-1 text-3xl font-semibold tabular-nums">{total}</p>
+    <p class="mt-1 text-3xl font-semibold tabular-nums">{isStablecoin && stablecoinAmount ? `${stablecoinAmount} ${cfg.token}` : total}</p>
+    {isStablecoin && pending.currency.toLowerCase() !== 'usd' && <p class="mt-2 text-xs text-red-700">当前店铺币种不是 USD，暂不自动换算稳定币汇率。请在后台将店铺币种设为 USD 后使用此支付方式。</p>}
     <p class="mt-1 text-xs text-muted">金额来自商品后台价格、规格/附加项和运费，结账时不可修改。</p>
   </div>
 
   <div class="mb-6 rounded-lg border border-line bg-surface p-4">
     <ul class="divide-y divide-line text-sm">
-      {items.map((it) => (
-        <li class="flex items-center justify-between gap-3 py-2">
-          <span class="min-w-0 truncate">{it.n} <span class="text-faint">x {it.q}</span></span>
-          <span class="shrink-0 tabular-nums">{formatPrice(it.p * it.q, pending.currency)}</span>
-        </li>
-      ))}
+      {items.map((it) => <li class="flex items-center justify-between gap-3 py-2"><span class="min-w-0 truncate">{it.n} <span class="text-faint">x {it.q}</span></span><span class="shrink-0 tabular-nums">{formatPrice(it.p * it.q, pending.currency)}</span></li>)}
     </ul>
     {shipping && <div class="flex items-center justify-between border-t border-line pt-2 text-sm text-muted"><span>运费</span><span class="tabular-nums">{shipping}</span></div>}
     <div class="mt-2 flex items-center justify-between border-t border-line pt-2 text-base font-medium"><span>合计</span><span class="tabular-nums">{total}</span></div>
@@ -84,23 +73,16 @@ const { storeName } = getConfig();
   </div>
 
   {declined && <p class="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{declined}</p>}
-
   <form method="POST" class="space-y-4">
     <div><label class="mb-1 block text-xs font-medium text-muted" for="email">接收订单确认的邮箱</label><input id="email" name="email" type="email" value={pending.email ?? ''} autocomplete="email" required class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
-    <div><label class="mb-1 block text-xs font-medium text-muted" for="proof">付款凭证或交易哈希</label><input id="proof" name="proof" type="text" required placeholder="交易号、哈希、付款截图编号等" class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
-    <button type="submit" class="w-full rounded-md bg-brand px-5 py-3 text-sm font-medium uppercase tracking-wider text-on-brand hover:bg-brand-hover">我已支付 {total}，提交订单</button>
+    <div><label class="mb-1 block text-xs font-medium text-muted" for="proof">{isStablecoin ? '交易哈希（Tx Hash）' : '付款凭证或交易号'}</label><input id="proof" name="proof" type="text" required placeholder={isStablecoin ? '粘贴链上交易哈希' : '交易号、付款截图编号等'} class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
+    <button type="submit" disabled={isStablecoin && pending.currency.toLowerCase() !== 'usd'} class="w-full rounded-md bg-brand px-5 py-3 text-sm font-medium uppercase tracking-wider text-on-brand hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50">我已支付，提交订单</button>
     <a href="/cart" class="block text-center text-xs uppercase tracking-widest text-faint hover:text-brand">取消并返回购物车</a>
   </form>
 </div>
-
 <script is:inline>
   document.querySelector('[data-copy]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
-    try {
-      await navigator.clipboard.writeText(btn.dataset.copyValue || '');
-      const prev = btn.textContent;
-      btn.textContent = '已复制';
-      setTimeout(() => (btn.textContent = prev), 1500);
-    } catch {}
+    try { await navigator.clipboard.writeText(btn.dataset.copyValue || ''); const prev = btn.textContent; btn.textContent = '已复制'; setTimeout(() => (btn.textContent = prev), 1500); } catch {}
   });
 </script>
