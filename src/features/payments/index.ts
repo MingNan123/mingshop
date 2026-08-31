@@ -93,7 +93,12 @@ export function hasRealMethod(settings: StoreSettings, vault = vaultReady()): bo
   return ALL_METHODS.some((m) => isMethodAvailable(m, settings, vault));
 }
 
-/** The store's default rail. Legacy `demo` settings safely fall back to Stripe. */
+/** Deprecated layout hook: demo mode no longer exists. */
+export function paymentsInDemoMode(_settings: StoreSettings): boolean {
+  return false;
+}
+
+/** The store's default rail. Legacy `demo` settings are normalized by settings/db. */
 export function defaultMethod(settings: StoreSettings): ActivePaymentMethod {
   return settings.paymentProvider;
 }
