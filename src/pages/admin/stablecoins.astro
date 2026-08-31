@@ -27,7 +27,7 @@ if (Astro.request.method === 'POST') {
   const usdcAddress = clean('usdc_address');
   const usdcNetwork = clean('usdc_network');
   const usdtMode = clean('usdt_mode') === 'tron' ? 'tron' : 'evm';
-  const usdtAddress = clean('usdt_address');
+  const usdtAddress = usdtMode === 'tron' ? clean('usdt_address_tron') : clean('usdt_address_evm');
   const usdtNetwork = usdtMode === 'tron' ? 'TRON (TRC-20)' : clean('usdt_network');
 
   const auto = (coin: 'usdc' | 'usdt') => ({
@@ -42,7 +42,7 @@ if (Astro.request.method === 'POST') {
   const clearTronGridKey = clean('clear_trongrid_api_key') === '1';
 
   const evmError = (coin: string, cfg: ReturnType<typeof auto>, receive: string) => {
-    const any = !!(cfg.rpc || cfg.token);
+    const any = !!(cfg.rpc || cfg.token || receive);
     if (!any) return '';
     if (!cfg.rpc || !cfg.token || !receive) return `${coin.toUpperCase()} EVM 自动验单需要 RPC URL、代币合约和收款地址。`;
     if (!/^https:\/\//i.test(cfg.rpc)) return `${coin.toUpperCase()} RPC URL 必须使用 HTTPS。`;
@@ -135,13 +135,12 @@ const tronGridKeyConfigured = settings.configuredSecrets.includes('trongrid_api_
       <section class="rounded-lg border border-line bg-surface p-5 space-y-4">
         <div><h2 class="text-lg font-medium">USDT</h2><p class="mt-1 text-xs text-muted">USDT 可选 EVM/ERC-20 或 TRON/TRC-20。切换模式后只会运行所选网络的自动监听器。</p></div>
         <label class="block text-sm"><span class="mb-1 block font-medium">自动验单网络类型</span><select name="usdt_mode" data-usdt-mode class="w-full rounded-md border border-line px-3 py-2"><option value="tron" selected={usdtMode === 'tron'}>TRON / TRC-20（推荐用于 USDT）</option><option value="evm" selected={usdtMode === 'evm'}>EVM / ERC-20</option></select></label>
+        <label class="block text-sm"><span class="mb-1 block font-medium">USDT Decimals</span><input name="usdt_decimals" type="number" min="2" max="18" value={runtime.usdtDecimals} class="w-full rounded-md border border-line px-3 py-2" /></label>
 
         <div data-usdt-tron class="grid gap-4 sm:grid-cols-2">
-          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TRC-20 USDT 收款地址</span><input name="usdt_address" value={settings.usdtAddress ?? ''} placeholder="T..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <input type="hidden" name="usdt_network_tron" value="TRON (TRC-20)" />
+          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TRC-20 USDT 收款地址</span><input name="usdt_address_tron" value={usdtMode === 'tron' ? settings.usdtAddress ?? '' : ''} placeholder="T..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
           <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TronGrid / TRON API</span><input name="usdt_tron_base_url" value={runtime.tronBaseUrl} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
           <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TRC-20 USDT 合约</span><input name="usdt_tron_token_address" value={runtime.tronToken} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <label class="block text-sm"><span class="mb-1 block font-medium">Decimals</span><input name="usdt_decimals" type="number" min="2" max="18" value={runtime.usdtDecimals} class="w-full rounded-md border border-line px-3 py-2" /></label>
           <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">TronGrid API Key</span><input name="trongrid_api_key" type="password" autocomplete="new-password" placeholder={tronGridKeyConfigured ? '已配置；留空保持不变' : '粘贴 TRON-PRO-API-KEY'} class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /><span class="mt-1 block text-xs text-muted">API Key 使用项目 Secret Vault 加密保存，不会回显。</span></label>
           {tronGridKeyConfigured && <label class="flex items-center gap-2 text-xs text-muted sm:col-span-2"><input type="checkbox" name="clear_trongrid_api_key" value="1" />清除已保存的 TronGrid API Key</label>}
         </div>
@@ -151,7 +150,7 @@ const tronGridKeyConfigured = settings.configuredSecrets.includes('trongrid_api_
           <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">EVM USDT 收款地址</span><input name="usdt_address_evm" value={usdtMode === 'evm' ? settings.usdtAddress ?? '' : ''} placeholder="0x..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
           <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">EVM RPC URL</span><input name="usdt_rpc_url" value={runtime.usdtRpc} placeholder="https://..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
           <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">USDT 代币合约</span><input name="usdt_token_address" value={runtime.usdtToken} placeholder="0x..." class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
-          <input type="hidden" name="usdt_confirmations" value={runtime.usdtConfirmations} />
+          <label class="block text-sm"><span class="mb-1 block font-medium">确认数</span><input name="usdt_confirmations" type="number" min="1" max="200" value={runtime.usdtConfirmations} class="w-full rounded-md border border-line px-3 py-2" /></label>
         </div>
       </section>
 
