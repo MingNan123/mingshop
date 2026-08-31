@@ -53,18 +53,22 @@ export async function targetChoices(
   return { options, remaining: Math.max(0, total - options.length) };
 }
 
+/**
+ * Stable service-layer reason strings. Keep these language-neutral/stable for
+ * integration callers; presentation layers may translate them for the admin UI.
+ */
 export function unavailableReason(item: MenuItem): string | null {
   if (item.available) return null;
-  if (!item.targetExists) return '目标不存在';
+  if (!item.targetExists) return 'Target no longer exists';
   switch (item.targetType) {
     case 'page':
-      return '草稿 — 前台不可见';
+      return 'Draft — hidden on the storefront';
     case 'product':
-      return '已停用 — 前台不可见';
+      return 'Inactive — hidden on the storefront';
     case 'category':
-      return '目标不存在';
+      return 'Target no longer exists';
     default:
-      return '不可用';
+      return 'Unavailable';
   }
 }
 
