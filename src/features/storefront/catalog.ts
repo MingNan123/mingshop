@@ -41,8 +41,6 @@ export function buildSortModel(base: string, sort: string, dir: 'asc' | 'desc'):
   return {
     options: STORE_SORTS.map((option) => {
       const current = sort === option.sort;
-      // Re-clicking the active field flips it; an inactive field applies its own
-      // natural direction (price ascending, newest descending).
       const nextDir = current ? (dir === 'asc' ? 'desc' : 'asc') : option.dir;
       return {
         label: option.label,
@@ -75,8 +73,6 @@ export function buildPaginationModel(
   sort: string,
   dir: 'asc' | 'desc',
 ): StorefrontPaginationModel {
-  // Defaults are omitted from the query so page 1 of the default sort is the
-  // bare path — the same URL the canonical points at.
   const hrefFor = (target: number) =>
     queryHref(base, {
       sort: sort === 'newest' ? undefined : sort,
@@ -107,11 +103,9 @@ export interface CatalogPageOptions {
    *  catalog works at both `/` and `/products` without hardcoding either. */
   base: string;
   searchParams: URLSearchParams;
-  /** Response headers, so product cache tags are attached where they belong. */
   responseHeaders: Headers;
   imageBaseUrl: string;
   delivery: ImageDelivery | undefined;
-  /** The store's configured currency, for price display. */
   currency: string;
   eyebrow: string;
   heading: string;
@@ -144,6 +138,7 @@ export async function loadCatalogPage(
   return {
     eyebrow: options.eyebrow,
     heading: options.heading,
+    allHref: options.base,
     categories: childrenOf(categories, null).map((category) => ({
       text: category.name,
       href: `/categories/${category.slug}`,
@@ -154,7 +149,6 @@ export async function loadCatalogPage(
         delivery: options.delivery,
         currency: options.currency,
         sizes: CARD_SIZES,
-        // Only the first card is the page's likely LCP image.
         priority: index === 0,
       }),
     ),
