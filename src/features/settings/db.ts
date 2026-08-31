@@ -19,7 +19,7 @@ export type SettingKey =
   | 'payment_provider' | 'lightning_backend' | 'lnbits_url' | 'phoenixd_url'
   | 'opennode_api_url' | 'alipay_payment_url' | 'wechatpay_payment_url'
   | 'usdc_address' | 'usdc_network' | 'usdt_address' | 'usdt_network'
-  | `enc:${string}`;
+  | `stablecoin_${string}` | `enc:${string}`;
 
 export type FeatureKey = 'cart_enabled' | 'buy_now_enabled';
 export type StoredPaymentProvider = 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'alipay' | 'wechatpay' | 'usdc' | 'usdt';
@@ -35,6 +35,7 @@ export interface StoreSettings {
   paymentProvider: StoredPaymentProvider; lightningBackend: 'phoenixd' | 'lnbits'; lnbitsUrl: string | null; phoenixdUrl: string | null;
   opennodeApiUrl: string | null; alipayPaymentUrl: string | null; wechatpayPaymentUrl: string | null;
   usdcAddress: string | null; usdcNetwork: string | null; usdtAddress: string | null; usdtNetwork: string | null;
+  usdcAutoVerifyReady: boolean; usdtAutoVerifyReady: boolean;
 }
 
 export async function getSetting(db: D1Database, key: SettingKey): Promise<string | null> {
@@ -52,6 +53,12 @@ export async function getStoreSettings(db: D1Database): Promise<StoreSettings> {
 }
 export function parseStoreSettings(results: Array<{ key: string; value: string }>): StoreSettings {
   const map = new Map((results ?? []).map((r) => [r.key, r.value]));
+  const autoReady = (coin: 'usdc' | 'usdt') => {
+    const rpc = map.get(`stablecoin_${coin}_rpc_url`) ?? '';
+    const token = map.get(`stablecoin_${coin}_token_address`) ?? '';
+    const receive = map.get(`${coin}_address`) ?? '';
+    return /^https:\/\//i.test(rpc) && /^0x[0-9a-fA-F]{40}$/.test(token) && /^0x[0-9a-fA-F]{40}$/.test(receive);
+  };
   return {
     setupComplete: map.get('setup_complete') === '1', storeName: map.get('store_name') ?? null,
     timeZone: normalizeTimeZone(map.get('time_zone')), stripeWebhookSecret: map.get('stripe_webhook_secret') ?? null,
@@ -74,6 +81,7 @@ export function parseStoreSettings(results: Array<{ key: string; value: string }
     alipayPaymentUrl: map.get('alipay_payment_url') ?? null, wechatpayPaymentUrl: map.get('wechatpay_payment_url') ?? null,
     usdcAddress: map.get('usdc_address') ?? null, usdcNetwork: map.get('usdc_network') ?? null,
     usdtAddress: map.get('usdt_address') ?? null, usdtNetwork: map.get('usdt_network') ?? null,
+    usdcAutoVerifyReady: autoReady('usdc'), usdtAutoVerifyReady: autoReady('usdt'),
   };
 }
 export async function setFeatureEnabled(db: D1Database, key: FeatureKey, enabled: boolean): Promise<void> { await setSetting(db, key, enabled ? null : '0'); }
