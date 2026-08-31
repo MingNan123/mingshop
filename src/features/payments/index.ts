@@ -19,6 +19,12 @@ export {
 } from './provider';
 export { MANUAL_WALLET_CHECKOUT_TTL_SECONDS } from './manual-wallet';
 
+/**
+ * Deprecated compatibility value for old in-flight code paths. Demo is never
+ * offered or available, so new checkouts cannot select it.
+ */
+export const DEMO_CHECKOUT_TTL_SECONDS = 0;
+
 export type PaymentMethod =
   | 'stripe'
   | 'waffo'
@@ -26,8 +32,11 @@ export type PaymentMethod =
   | 'opennode'
   | 'alipay'
   | 'wechatpay'
-  | 'usdc';
-const ALL_METHODS: PaymentMethod[] = [
+  | 'usdc'
+  | 'demo';
+
+type ActivePaymentMethod = Exclude<PaymentMethod, 'demo'>;
+const ALL_METHODS: ActivePaymentMethod[] = [
   'stripe',
   'waffo',
   'lightning',
@@ -36,7 +45,7 @@ const ALL_METHODS: PaymentMethod[] = [
   'wechatpay',
   'usdc',
 ];
-const OFFERED: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'alipay', 'wechatpay', 'usdc'];
+const OFFERED: ActivePaymentMethod[] = ['stripe', 'waffo', 'lightning', 'alipay', 'wechatpay', 'usdc'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
   return (
@@ -46,7 +55,8 @@ export function isPaymentMethod(value: string): value is PaymentMethod {
     value === 'opennode' ||
     value === 'alipay' ||
     value === 'wechatpay' ||
-    value === 'usdc'
+    value === 'usdc' ||
+    value === 'demo'
   );
 }
 
@@ -74,6 +84,8 @@ export function isMethodAvailable(
       return settings.lightningBackend === 'lnbits'
         ? !!settings.lnbitsUrl && has('lnbits_api_key')
         : !!settings.phoenixdUrl && has('phoenixd_password');
+    case 'demo':
+      return false;
   }
 }
 
@@ -82,15 +94,15 @@ export function hasRealMethod(settings: StoreSettings, vault = vaultReady()): bo
 }
 
 /** The store's default rail. Legacy `demo` settings safely fall back to Stripe. */
-export function defaultMethod(settings: StoreSettings): PaymentMethod {
-  return isPaymentMethod(settings.paymentProvider) ? settings.paymentProvider : 'stripe';
+export function defaultMethod(settings: StoreSettings): ActivePaymentMethod {
+  return settings.paymentProvider;
 }
 
-/** Configured, enabled methods a buyer or agent can actually use. */
+/** Configured, enabled real methods a buyer or agent can actually use. */
 export function enabledMethods(
   settings: StoreSettings,
   vault = vaultReady(),
-): PaymentMethod[] {
+): ActivePaymentMethod[] {
   const off = new Set(settings.disabledPaymentMethods);
   const def = defaultMethod(settings);
   return [def, ...ALL_METHODS.filter((m) => m !== def)]
@@ -102,12 +114,12 @@ export function enabledMethods(
 export function offeredMethods(
   settings: StoreSettings,
   vault = vaultReady(),
-): PaymentMethod[] {
+): ActivePaymentMethod[] {
   const off = new Set(settings.disabledPaymentMethods);
   const extra = ALL_METHODS.filter(
     (m) => !OFFERED.includes(m) && isMethodAvailable(m, settings, vault),
   );
-  return ([...OFFERED, ...extra] as PaymentMethod[]).filter((m) => !off.has(m));
+  return ([...OFFERED, ...extra] as ActivePaymentMethod[]).filter((m) => !off.has(m));
 }
 
 /** Build a concrete payment provider. */
@@ -115,6 +127,8 @@ export async function getPaymentProvider(method?: PaymentMethod): Promise<Paymen
   const settings = await getStoreSettings(env.DB);
   const m = method ?? defaultMethod(settings);
   switch (m) {
+    case 'demo':
+      throw new Error('Demo checkout has been removed.');
     case 'waffo':
       if (!isWaffoConfigured()) throw new Error('Waffo is not fully configured.');
       return createWaffoProvider();
