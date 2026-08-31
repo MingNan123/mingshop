@@ -1,3 +1,4 @@
+import type { ExportedHandler } from '@cloudflare/workers-types';
 import { handle } from '@astrojs/cloudflare/handler';
 import { env } from 'cloudflare:workers';
 import { sweepStaleNotifications } from './features/email/outbox';
