@@ -26,11 +26,11 @@ const CONFIG: Record<string, { title: string; label: string; target: string; hin
   },
   usdc: {
     title: '使用 USDC 支付', label: `${settings.usdcNetwork ?? 'USDC'} 收款地址`, target: settings.usdcAddress ?? '', token: 'USDC',
-    hint: `请只通过 ${settings.usdcNetwork ?? '后台配置'} 网络发送 USDC。金额由订单锁定，转错网络可能无法找回。`, copyLabel: '复制地址',
+    hint: `只通过 ${settings.usdcNetwork ?? '后台配置'} 网络发送 USDC。系统会在达到确认数后自动核对到账并完成订单。`, copyLabel: '复制地址',
   },
   usdt: {
     title: '使用 USDT 支付', label: `${settings.usdtNetwork ?? 'USDT'} 收款地址`, target: settings.usdtAddress ?? '', token: 'USDT',
-    hint: `请只通过 ${settings.usdtNetwork ?? '后台配置'} 网络发送 USDT。金额由订单锁定，转错网络可能无法找回。`, copyLabel: '复制地址',
+    hint: `只通过 ${settings.usdtNetwork ?? '后台配置'} 网络发送 USDT。系统会在达到确认数后自动核对到账并完成订单。`, copyLabel: '复制地址',
   },
 };
 const cfg = CONFIG[pending.backend] ?? CONFIG.usdc;
@@ -51,7 +51,7 @@ const { storeName } = getConfig();
   <div class="mb-4 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-center">
     <p class="text-xs uppercase tracking-widest text-muted">固定应付金额</p>
     <p class="mt-1 text-3xl font-semibold tabular-nums">{isStablecoin && stablecoinAmount ? `${stablecoinAmount} ${cfg.token}` : total}</p>
-    {isStablecoin && pending.currency.toLowerCase() !== 'usd' && <p class="mt-2 text-xs text-red-700">当前店铺币种不是 USD，暂不自动换算稳定币汇率。请在后台将店铺币种设为 USD 后使用此支付方式。</p>}
+    {isStablecoin && pending.currency.toLowerCase() !== 'usd' && <p class="mt-2 text-xs text-red-700">当前店铺币种不是 USD，稳定币自动验单已暂停。</p>}
     <p class="mt-1 text-xs text-muted">金额来自商品后台价格、规格/附加项和运费，结账时不可修改。</p>
   </div>
 
@@ -69,20 +69,34 @@ const { storeName } = getConfig();
     <p class="break-all rounded-md border border-line bg-white px-3 py-2 font-mono text-xs text-ink">{cfg.target}</p>
     <button type="button" data-copy data-copy-value={cfg.target} class="mt-3 rounded-md border border-line px-3 py-2 text-xs font-medium uppercase tracking-wider text-muted hover:border-brand hover:text-brand">{cfg.copyLabel}</button>
     <p class="mt-3 text-sm text-muted">{cfg.hint}</p>
-    <p class="mt-2 text-xs text-faint">订单备注：<code class="rounded bg-white px-1">{orderMemo}</code></p>
+    <p class="mt-2 text-xs text-faint">订单号：<code class="rounded bg-white px-1">{orderMemo}</code></p>
   </div>
 
   {declined && <p class="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{declined}</p>}
-  <form method="POST" class="space-y-4">
-    <div><label class="mb-1 block text-xs font-medium text-muted" for="email">接收订单确认的邮箱</label><input id="email" name="email" type="email" value={pending.email ?? ''} autocomplete="email" required class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
-    <div><label class="mb-1 block text-xs font-medium text-muted" for="proof">{isStablecoin ? '交易哈希（Tx Hash）' : '付款凭证或交易号'}</label><input id="proof" name="proof" type="text" required placeholder={isStablecoin ? '粘贴链上交易哈希' : '交易号、付款截图编号等'} class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
-    <button type="submit" disabled={isStablecoin && pending.currency.toLowerCase() !== 'usd'} class="w-full rounded-md bg-brand px-5 py-3 text-sm font-medium uppercase tracking-wider text-on-brand hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50">我已支付，提交订单</button>
-    <a href="/cart" class="block text-center text-xs uppercase tracking-widest text-faint hover:text-brand">取消并返回购物车</a>
-  </form>
+
+  {isStablecoin ? (
+    <div class="space-y-3">
+      <div class="rounded-lg border border-line bg-surface px-4 py-4 text-center">
+        <p class="text-sm font-medium">等待链上确认</p>
+        <p class="mt-1 text-xs text-muted">付款后无需提交 Tx Hash。Cloudflare 会自动检测代币合约、收款地址、精确金额和确认数；确认成功后本页会自动进入订单页面。</p>
+      </div>
+      <button type="button" data-refresh class="w-full rounded-md border border-line px-5 py-3 text-sm font-medium hover:border-brand hover:text-brand">我已付款，立即检查状态</button>
+      <a href="/cart" class="block text-center text-xs uppercase tracking-widest text-faint hover:text-brand">返回购物车</a>
+    </div>
+  ) : (
+    <form method="POST" class="space-y-4">
+      <div><label class="mb-1 block text-xs font-medium text-muted" for="email">接收订单确认的邮箱</label><input id="email" name="email" type="email" value={pending.email ?? ''} autocomplete="email" required class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
+      <div><label class="mb-1 block text-xs font-medium text-muted" for="proof">付款凭证或交易号</label><input id="proof" name="proof" type="text" required placeholder="交易号、付款截图编号等" class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
+      <button type="submit" class="w-full rounded-md bg-brand px-5 py-3 text-sm font-medium uppercase tracking-wider text-on-brand hover:bg-brand-hover">我已支付，提交订单</button>
+      <a href="/cart" class="block text-center text-xs uppercase tracking-widest text-faint hover:text-brand">取消并返回购物车</a>
+    </form>
+  )}
 </div>
 <script is:inline>
   document.querySelector('[data-copy]')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     try { await navigator.clipboard.writeText(btn.dataset.copyValue || ''); const prev = btn.textContent; btn.textContent = '已复制'; setTimeout(() => (btn.textContent = prev), 1500); } catch {}
   });
+  document.querySelector('[data-refresh]')?.addEventListener('click', () => location.reload());
+  if (document.querySelector('[data-refresh]')) setTimeout(() => location.reload(), 20000);
 </script>
