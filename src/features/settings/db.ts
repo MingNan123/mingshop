@@ -57,6 +57,14 @@ export type SettingKey =
   | `enc:${string}`;
 
 export type FeatureKey = 'cart_enabled' | 'buy_now_enabled';
+export type StoredPaymentProvider =
+  | 'stripe'
+  | 'waffo'
+  | 'lightning'
+  | 'opennode'
+  | 'alipay'
+  | 'wechatpay'
+  | 'usdc';
 
 export interface StoreSettings {
   setupComplete: boolean;
@@ -87,7 +95,7 @@ export interface StoreSettings {
   weightUnit: WeightUnit;
   turnstileEnabled: boolean;
   turnstileSiteKey: string | null;
-  paymentProvider: 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'alipay' | 'wechatpay' | 'usdc' | 'demo';
+  paymentProvider: StoredPaymentProvider;
   lightningBackend: 'phoenixd' | 'lnbits';
   lnbitsUrl: string | null;
   phoenixdUrl: string | null;
@@ -144,7 +152,7 @@ export function parseStoreSettings(
     disabledPaymentMethods: (map.get('payment_methods_disabled') ?? '')
       .split(',')
       .map((s) => s.trim())
-      .filter(Boolean),
+      .filter((s) => s && s !== 'demo'),
     cartEnabled: map.get('cart_enabled') !== '0',
     buyNowEnabled: map.get('buy_now_enabled') !== '0',
     searchProvider: map.get('search_provider') === 'vector' ? 'vector'
@@ -181,7 +189,6 @@ export function parseStoreSettings(
       : map.get('payment_provider') === 'alipay' ? 'alipay'
       : map.get('payment_provider') === 'wechatpay' ? 'wechatpay'
       : map.get('payment_provider') === 'usdc' ? 'usdc'
-      : map.get('payment_provider') === 'demo' ? 'demo'
       : 'stripe',
     lightningBackend: map.get('lightning_backend') === 'lnbits' ? 'lnbits' : 'phoenixd',
     lnbitsUrl: map.get('lnbits_url') ?? null,
@@ -207,12 +214,13 @@ export async function setPaymentMethodDisabled(
   method: string,
   disabled: boolean,
 ): Promise<void> {
+  if (method === 'demo') return;
   const current = (await getSetting(db, 'payment_methods_disabled')) ?? '';
   const set = new Set(
     current
       .split(',')
       .map((s) => s.trim())
-      .filter(Boolean),
+      .filter((s) => s && s !== 'demo'),
   );
   if (disabled) set.add(method);
   else set.delete(method);
