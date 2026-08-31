@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import type { PaidOrderInput, OrderItemInput, ShippingAddress } from '../../orders/db';
+import { stablecoinSnapshot, type StablecoinNetworkProfile, type StablecoinToken } from '../stablecoin-networks';
 
 export interface PendingPayment {
   id: number;
@@ -18,6 +19,8 @@ export interface PendingPayment {
   delivery_method: string | null;
   ship_address: string | null;
   reservation_id: string | null;
+  stablecoin_network_id: string | null;
+  stablecoin_network_snapshot: string | null;
   status: string;
   expires_at: string | null;
   created_at: string;
@@ -39,6 +42,8 @@ export interface NewPendingPayment {
   deliveryMethod?: 'pickup' | 'shipping' | null;
   shipAddressJson?: string | null;
   reservationId?: string | null;
+  stablecoinNetworkId?: string | null;
+  stablecoinNetworkSnapshot?: string | null;
   expiresAt: string | null;
 }
 
@@ -46,8 +51,8 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
   await db
     .prepare(
       `INSERT INTO pending_payments
-         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id, stablecoin_network_id, stablecoin_network_snapshot)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       p.publicId,
@@ -66,6 +71,8 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
       p.shipAddressJson ?? null,
       p.expiresAt,
       p.reservationId ?? null,
+      p.stablecoinNetworkId ?? null,
+      p.stablecoinNetworkSnapshot ?? null,
     )
     .run();
 }
@@ -84,8 +91,6 @@ export async function getPendingByHash(
   return db.prepare('SELECT * FROM pending_payments WHERE payment_hash = ?').bind(paymentHash).first<PendingPayment>();
 }
 
-/** Capture contact information without changing payment status. The chain watcher
- * remains the only settlement authority for stablecoin orders. */
 export async function updatePendingEmail(
   db: D1Database,
   publicId: string,
@@ -97,6 +102,32 @@ export async function updatePendingEmail(
     `UPDATE pending_payments SET email = ?
      WHERE public_id = ? AND status = 'pending'`,
   ).bind(normalized, publicId).run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+/**
+ * Freeze the merchant-approved network chosen by the buyer. The full network
+ * profile is snapshotted so later admin edits cannot redirect an already-created
+ * payment request to another chain/address/contract.
+ */
+export async function selectPendingStablecoinNetwork(
+  db: D1Database,
+  publicId: string,
+  token: StablecoinToken,
+  profile: StablecoinNetworkProfile,
+  email?: string | null,
+): Promise<boolean> {
+  if (!profile.enabled || profile.token !== token) return false;
+  let normalizedEmail: string | null = null;
+  if (email != null && email.trim() !== '') {
+    normalizedEmail = email.trim().toLowerCase();
+    if (!/.+@.+\..+/.test(normalizedEmail) || normalizedEmail.length > 254) return false;
+  }
+  const result = await db.prepare(
+    `UPDATE pending_payments
+        SET email = COALESCE(?, email), stablecoin_network_id = ?, stablecoin_network_snapshot = ?
+      WHERE public_id = ? AND backend = ? AND status = 'pending'`,
+  ).bind(normalizedEmail, profile.id, stablecoinSnapshot(profile), publicId, token).run();
   return (result.meta.changes ?? 0) > 0;
 }
 
