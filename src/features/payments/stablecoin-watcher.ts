@@ -1,8 +1,8 @@
-import { env } from 'cloudflare:workers';
 import type { D1Database } from '@cloudflare/workers-types';
 import { pendingToPaidOrder, type PendingPayment } from './lightning/pending';
 import { recordPaidWebhookOrder } from '../orders/recordWebhook';
 import { getStoreSettings } from '../settings/db';
+import { getSecret } from '../secrets/store';
 
 export type StablecoinMethod = 'usdc' | 'usdt';
 
@@ -10,6 +10,8 @@ const TRANSFER_TOPIC =
   '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const INITIAL_LOOKBACK_BLOCKS = 2_000n;
 const MAX_BLOCK_SPAN = 1_000n;
+const TRON_CURSOR_OVERLAP_MS = 30 * 60 * 1000;
+const TRON_MAX_PAGES_PER_SWEEP = 20;
 
 type RpcLog = {
   transactionHash: string;
@@ -18,10 +20,8 @@ type RpcLog = {
   topics: string[];
   removed?: boolean;
 };
-
 type RpcBlock = { timestamp: string };
-
-type WatchConfig = {
+type EvmWatchConfig = {
   method: StablecoinMethod;
   rpcUrl: string;
   tokenAddress: string;
@@ -29,16 +29,38 @@ type WatchConfig = {
   decimals: number;
   confirmations: number;
 };
+type TronWatchConfig = {
+  baseUrl: string;
+  tokenAddress: string;
+  receiveAddress: string;
+  decimals: number;
+  apiKey: string | null;
+};
+type TronTrc20Transfer = {
+  transaction_id?: string;
+  token_info?: { address?: string; decimals?: number; symbol?: string };
+  block_timestamp?: number;
+  from?: string;
+  to?: string;
+  type?: string;
+  value?: string;
+};
+type TronGridResponse = {
+  success?: boolean;
+  data?: TronTrc20Transfer[];
+  meta?: { fingerprint?: string };
+};
 
 function isEvmAddress(value: string): boolean {
   return /^0x[0-9a-fA-F]{40}$/.test(value);
 }
-
+function isTronBase58Address(value: string): boolean {
+  return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(value);
+}
 async function readSetting(db: D1Database, key: string): Promise<string | null> {
   const row = await db.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>();
   return row?.value ?? null;
 }
-
 async function writeSetting(db: D1Database, key: string, value: string): Promise<void> {
   await db.prepare(
     `INSERT INTO settings (key, value) VALUES (?, ?)
@@ -59,7 +81,13 @@ async function rpc<T>(url: string, method: string, params: unknown[]): Promise<T
   return body.result;
 }
 
-async function loadWatchConfig(db: D1Database, method: StablecoinMethod): Promise<WatchConfig | null> {
+async function stablecoinMode(db: D1Database, method: StablecoinMethod): Promise<'evm' | 'tron'> {
+  if (method !== 'usdt') return 'evm';
+  return (await readSetting(db, 'stablecoin_usdt_mode')) === 'tron' ? 'tron' : 'evm';
+}
+
+async function loadEvmWatchConfig(db: D1Database, method: StablecoinMethod): Promise<EvmWatchConfig | null> {
+  if (await stablecoinMode(db, method) !== 'evm') return null;
   const [rpcUrl, tokenAddress, decimalsRaw, confirmationsRaw, receiveAddress] = await Promise.all([
     readSetting(db, `stablecoin_${method}_rpc_url`),
     readSetting(db, `stablecoin_${method}_token_address`),
@@ -77,14 +105,32 @@ async function loadWatchConfig(db: D1Database, method: StablecoinMethod): Promis
   return { method, rpcUrl, tokenAddress, receiveAddress, decimals, confirmations };
 }
 
+async function loadTronWatchConfig(db: D1Database): Promise<TronWatchConfig | null> {
+  if (await stablecoinMode(db, 'usdt') !== 'tron') return null;
+  const [baseUrlRaw, tokenAddress, decimalsRaw, receiveAddress, apiKey] = await Promise.all([
+    readSetting(db, 'stablecoin_usdt_tron_base_url'),
+    readSetting(db, 'stablecoin_usdt_tron_token_address'),
+    readSetting(db, 'stablecoin_usdt_decimals'),
+    readSetting(db, 'usdt_address'),
+    getSecret(db, 'trongrid_api_key'),
+  ]);
+  const baseUrl = (baseUrlRaw || 'https://api.trongrid.io').replace(/\/+$/, '');
+  const decimals = Number(decimalsRaw ?? '6');
+  if (!/^https:\/\//i.test(baseUrl) || !tokenAddress || !receiveAddress) return null;
+  if (!isTronBase58Address(tokenAddress) || !isTronBase58Address(receiveAddress)) return null;
+  if (!Number.isInteger(decimals) || decimals < 2 || decimals > 18) return null;
+  let host = '';
+  try { host = new URL(baseUrl).host.toLowerCase(); } catch { return null; }
+  if (host === 'api.trongrid.io' && !apiKey) return null;
+  return { baseUrl, tokenAddress, receiveAddress, decimals, apiKey };
+}
+
 function toTopicAddress(address: string): string {
   return `0x${address.toLowerCase().slice(2).padStart(64, '0')}`;
 }
-
 function expectedUnits(amountCents: number, decimals: number): bigint {
   return BigInt(amountCents) * 10n ** BigInt(decimals - 2);
 }
-
 async function pendingCandidates(db: D1Database, method: StablecoinMethod): Promise<PendingPayment[]> {
   const { results } = await db.prepare(
     `SELECT * FROM pending_payments
@@ -95,7 +141,6 @@ async function pendingCandidates(db: D1Database, method: StablecoinMethod): Prom
   ).bind(method).all<PendingPayment>();
   return results ?? [];
 }
-
 async function txAlreadyUsed(db: D1Database, txHash: string): Promise<boolean> {
   const row = await db.prepare(
     'SELECT id FROM orders WHERE lower(provider_payment_id) = lower(?) LIMIT 1',
@@ -103,65 +148,57 @@ async function txAlreadyUsed(db: D1Database, txHash: string): Promise<boolean> {
   return !!row;
 }
 
-async function blockTimestampMs(config: WatchConfig, blockHex: string): Promise<number> {
-  const block = await rpc<RpcBlock>(config.rpcUrl, 'eth_getBlockByNumber', [blockHex, false]);
-  return Number(BigInt(block.timestamp)) * 1000;
-}
-
-async function settleUniqueLog(
+async function settleMatchingTransfer(
   db: D1Database,
-  config: WatchConfig,
-  log: RpcLog,
+  method: StablecoinMethod,
+  txHash: string,
+  value: bigint,
+  decimals: number,
+  paidAt: number,
   origin: string,
 ): Promise<boolean> {
-  if (log.removed || !/^0x[0-9a-fA-F]{64}$/.test(log.transactionHash)) return false;
-  if (await txAlreadyUsed(db, log.transactionHash)) return false;
-  let value: bigint;
-  try { value = BigInt(log.data); } catch { return false; }
-
-  const pending = await pendingCandidates(db, config.method);
-  const amountMatches = pending.filter((p) => expectedUnits(p.amount_total_cents, config.decimals) === value);
+  if (await txAlreadyUsed(db, txHash)) return false;
+  const pending = await pendingCandidates(db, method);
+  const amountMatches = pending.filter((p) => expectedUnits(p.amount_total_cents, decimals) === value);
   if (amountMatches.length === 0) return false;
-
-  const paidAt = await blockTimestampMs(config, log.blockNumber);
   const eligible = amountMatches.filter((p) => {
     const createdAt = Date.parse(p.created_at);
-    return Number.isFinite(createdAt) && paidAt >= createdAt - 120_000;
+    const expiresAt = p.expires_at ? Date.parse(p.expires_at) : Number.POSITIVE_INFINITY;
+    return Number.isFinite(createdAt) && paidAt >= createdAt - 120_000 && paidAt <= expiresAt;
   });
-
-  // Shared receiving addresses can have two live orders for the exact same amount.
-  // Never guess which customer paid: only a unique match is auto-settled.
   if (eligible.length !== 1) {
     if (eligible.length > 1) {
-      console.warn(JSON.stringify({ event: 'stablecoin_ambiguous_payment', method: config.method, tx: log.transactionHash, matches: eligible.map((p) => p.public_id) }));
+      console.warn(JSON.stringify({ event: 'stablecoin_ambiguous_payment', method, tx: txHash, matches: eligible.map((p) => p.public_id) }));
     }
     return false;
   }
-
   const p = eligible[0];
   const settings = await getStoreSettings(db);
-  const order = { ...pendingToPaidOrder(p), providerPaymentId: log.transactionHash };
-  await recordPaidWebhookOrder(
-    { type: `${config.method}.chain_confirmed`, order },
-    origin,
-    config.method,
-    settings,
-  );
-  console.log(JSON.stringify({ event: 'stablecoin_payment_settled', method: config.method, order: p.public_id, tx: log.transactionHash }));
+  const order = { ...pendingToPaidOrder(p), providerPaymentId: txHash };
+  await recordPaidWebhookOrder({ type: `${method}.chain_confirmed`, order }, origin, method, settings);
+  console.log(JSON.stringify({ event: 'stablecoin_payment_settled', method, order: p.public_id, tx: txHash }));
   return true;
 }
 
-async function scanMethod(db: D1Database, config: WatchConfig, origin: string): Promise<void> {
+async function blockTimestampMs(config: EvmWatchConfig, blockHex: string): Promise<number> {
+  const block = await rpc<RpcBlock>(config.rpcUrl, 'eth_getBlockByNumber', [blockHex, false]);
+  return Number(BigInt(block.timestamp)) * 1000;
+}
+async function settleEvmLog(db: D1Database, config: EvmWatchConfig, log: RpcLog, origin: string): Promise<boolean> {
+  if (log.removed || !/^0x[0-9a-fA-F]{64}$/.test(log.transactionHash)) return false;
+  let value: bigint;
+  try { value = BigInt(log.data); } catch { return false; }
+  const paidAt = await blockTimestampMs(config, log.blockNumber);
+  return settleMatchingTransfer(db, config.method, log.transactionHash, value, config.decimals, paidAt, origin);
+}
+async function scanEvmMethod(db: D1Database, config: EvmWatchConfig, origin: string): Promise<void> {
   const latestHex = await rpc<string>(config.rpcUrl, 'eth_blockNumber', []);
   const latest = BigInt(latestHex);
-  const safeHead = latest >= BigInt(config.confirmations - 1)
-    ? latest - BigInt(config.confirmations - 1)
-    : 0n;
+  const safeHead = latest >= BigInt(config.confirmations - 1) ? latest - BigInt(config.confirmations - 1) : 0n;
   const cursorKey = `stablecoin_${config.method}_cursor`;
   const cursorRaw = await readSetting(db, cursorKey);
   let from = cursorRaw ? BigInt(cursorRaw) + 1n : (safeHead > INITIAL_LOOKBACK_BLOCKS ? safeHead - INITIAL_LOOKBACK_BLOCKS : 0n);
   if (from > safeHead) return;
-
   const recipientTopic = toTopicAddress(config.receiveAddress);
   while (from <= safeHead) {
     const to = from + MAX_BLOCK_SPAN - 1n < safeHead ? from + MAX_BLOCK_SPAN - 1n : safeHead;
@@ -171,31 +208,106 @@ async function scanMethod(db: D1Database, config: WatchConfig, origin: string): 
       address: config.tokenAddress,
       topics: [TRANSFER_TOPIC, null, recipientTopic],
     }]);
-    for (const log of logs) await settleUniqueLog(db, config, log, origin);
+    for (const log of logs) await settleEvmLog(db, config, log, origin);
     await writeSetting(db, cursorKey, to.toString());
     from = to + 1n;
   }
 }
 
-/**
- * Auto-settle confirmed ERC-20 USDC/USDT transfers on configured EVM networks.
- * Safe to run from Cron repeatedly: block cursors and provider_payment_id make it idempotent.
- */
-export async function sweepStablecoinPayments(db: D1Database, origin: string): Promise<void> {
-  for (const method of ['usdc', 'usdt'] as const) {
-    try {
-      const config = await loadWatchConfig(db, method);
-      if (config) await scanMethod(db, config, origin);
-    } catch (err) {
-      console.error(`Scheduled ${method.toUpperCase()} chain sweep failed:`, err);
+async function fetchTronPage(
+  config: TronWatchConfig,
+  minTimestamp: number,
+  maxTimestamp: number,
+  fingerprint?: string,
+): Promise<TronGridResponse> {
+  const url = new URL(`/v1/accounts/${encodeURIComponent(config.receiveAddress)}/transactions/trc20`, `${config.baseUrl}/`);
+  url.searchParams.set('only_confirmed', 'true');
+  url.searchParams.set('only_to', 'true');
+  url.searchParams.set('limit', '200');
+  url.searchParams.set('order_by', 'block_timestamp,asc');
+  url.searchParams.set('min_timestamp', String(Math.max(0, Math.floor(minTimestamp))));
+  url.searchParams.set('max_timestamp', String(Math.max(0, Math.floor(maxTimestamp))));
+  url.searchParams.set('contract_address', config.tokenAddress);
+  if (fingerprint) url.searchParams.set('fingerprint', fingerprint);
+  const headers: Record<string, string> = { accept: 'application/json' };
+  if (config.apiKey) headers['TRON-PRO-API-KEY'] = config.apiKey;
+  const response = await fetch(url.toString(), { headers });
+  if (!response.ok) throw new Error(`TronGrid HTTP ${response.status}`);
+  const body = await response.json() as TronGridResponse;
+  if (body.success === false) throw new Error('TronGrid returned success=false');
+  return body;
+}
+
+async function scanTronUsdt(db: D1Database, config: TronWatchConfig, origin: string): Promise<void> {
+  const pending = await pendingCandidates(db, 'usdt');
+  if (pending.length === 0) return;
+  const oldestCreated = Math.min(...pending.map((p) => Date.parse(p.created_at)).filter(Number.isFinite));
+  if (!Number.isFinite(oldestCreated)) return;
+  const cursorRaw = await readSetting(db, 'stablecoin_usdt_tron_cursor_ms');
+  const cursor = cursorRaw ? Number(cursorRaw) : NaN;
+  const earliestOrder = oldestCreated - 120_000;
+  const minTimestamp = Number.isFinite(cursor) ? Math.max(earliestOrder, cursor - TRON_CURSOR_OVERLAP_MS) : earliestOrder;
+  const maxTimestamp = Date.now();
+  let fingerprint: string | undefined;
+  let pageCount = 0;
+  let maxSeen = minTimestamp;
+
+  do {
+    const body = await fetchTronPage(config, minTimestamp, maxTimestamp, fingerprint);
+    for (const transfer of body.data ?? []) {
+      const tx = transfer.transaction_id ?? '';
+      const paidAt = Number(transfer.block_timestamp ?? 0);
+      if (!/^[0-9a-fA-F]{64}$/.test(tx) || !Number.isFinite(paidAt) || paidAt <= 0) continue;
+      if (transfer.type && transfer.type !== 'Transfer') continue;
+      if (transfer.to !== config.receiveAddress) continue;
+      if (transfer.token_info?.address && transfer.token_info.address !== config.tokenAddress) continue;
+      const tokenDecimals = Number(transfer.token_info?.decimals ?? config.decimals);
+      if (tokenDecimals !== config.decimals) {
+        console.warn(JSON.stringify({ event: 'stablecoin_tron_decimals_mismatch', tx, configured: config.decimals, observed: tokenDecimals }));
+        continue;
+      }
+      let value: bigint;
+      try { value = BigInt(transfer.value ?? ''); } catch { continue; }
+      await settleMatchingTransfer(db, 'usdt', tx, value, config.decimals, paidAt, origin);
+      if (paidAt > maxSeen) maxSeen = paidAt;
     }
+    fingerprint = body.meta?.fingerprint || undefined;
+    pageCount += 1;
+  } while (fingerprint && pageCount < TRON_MAX_PAGES_PER_SWEEP);
+
+  // Keep a large overlap so indexing delays cannot make us miss a confirmed transfer.
+  // Tx-hash idempotency makes rescanning the overlap harmless.
+  await writeSetting(
+    db,
+    'stablecoin_usdt_tron_cursor_ms',
+    String(fingerprint ? Math.max(minTimestamp, maxSeen) : maxTimestamp),
+  );
+}
+
+/** Auto-settle confirmed USDC/USDT transfers on configured networks. */
+export async function sweepStablecoinPayments(db: D1Database, origin: string): Promise<void> {
+  try {
+    const usdc = await loadEvmWatchConfig(db, 'usdc');
+    if (usdc) await scanEvmMethod(db, usdc, origin);
+  } catch (err) {
+    console.error('Scheduled USDC chain sweep failed:', err);
+  }
+  try {
+    const mode = await stablecoinMode(db, 'usdt');
+    if (mode === 'tron') {
+      const tron = await loadTronWatchConfig(db);
+      if (tron) await scanTronUsdt(db, tron, origin);
+    } else {
+      const usdt = await loadEvmWatchConfig(db, 'usdt');
+      if (usdt) await scanEvmMethod(db, usdt, origin);
+    }
+  } catch (err) {
+    console.error('Scheduled USDT chain sweep failed:', err);
   }
 }
 
-/** Used by admin/tests to determine whether automatic EVM verification is configured. */
+/** Used by admin/tests to determine whether automatic verification is configured. */
 export async function stablecoinAutoVerifyConfigured(db: D1Database, method: StablecoinMethod): Promise<boolean> {
-  return !!(await loadWatchConfig(db, method));
+  if (method === 'usdt' && await stablecoinMode(db, method) === 'tron') return !!(await loadTronWatchConfig(db));
+  return !!(await loadEvmWatchConfig(db, method));
 }
-
-// Keep the env import reachable in Workers builds that tree-shake scheduled-only modules.
-void env;
