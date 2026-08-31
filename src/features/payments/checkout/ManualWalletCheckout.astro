@@ -39,7 +39,8 @@ const stablecoinAmount = pending.currency.toLowerCase() === 'usd' ? (pending.amo
 const shipping = pending.shipping_cents ? formatPrice(pending.shipping_cents, pending.currency) : null;
 const orderMemo = pending.public_id;
 const isStablecoin = pending.backend === 'usdc' || pending.backend === 'usdt';
-const qrValue = isStablecoin ? cfg.target : cfg.target || orderMemo;
+const contactReady = !isStablecoin || !!pending.email;
+const qrValue = contactReady ? (isStablecoin ? cfg.target : cfg.target || orderMemo) : '';
 const qrSvg = qrValue ? renderSVG(qrValue, { border: 2 }) : null;
 const { storeName } = getConfig();
 ---
@@ -63,26 +64,40 @@ const { storeName } = getConfig();
     <div class="mt-2 flex items-center justify-between border-t border-line pt-2 text-base font-medium"><span>合计</span><span class="tabular-nums">{total}</span></div>
   </div>
 
-  <div class="mb-6 rounded-lg border border-line bg-surface p-4 text-center">
-    {qrSvg && <div class="mx-auto mb-4 aspect-square w-full max-w-[16rem] rounded-lg bg-white p-2 [&>svg]:h-full [&>svg]:w-full" set:html={qrSvg} />}
-    <p class="mb-1 text-xs uppercase tracking-widest text-muted">{cfg.label}</p>
-    <p class="break-all rounded-md border border-line bg-white px-3 py-2 font-mono text-xs text-ink">{cfg.target}</p>
-    <button type="button" data-copy data-copy-value={cfg.target} class="mt-3 rounded-md border border-line px-3 py-2 text-xs font-medium uppercase tracking-wider text-muted hover:border-brand hover:text-brand">{cfg.copyLabel}</button>
-    <p class="mt-3 text-sm text-muted">{cfg.hint}</p>
-    <p class="mt-2 text-xs text-faint">订单号：<code class="rounded bg-white px-1">{orderMemo}</code></p>
-  </div>
-
   {declined && <p class="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{declined}</p>}
 
-  {isStablecoin ? (
-    <div class="space-y-3">
-      <div class="rounded-lg border border-line bg-surface px-4 py-4 text-center">
-        <p class="text-sm font-medium">等待链上确认</p>
-        <p class="mt-1 text-xs text-muted">付款后无需提交 Tx Hash。Cloudflare 会自动检测代币合约、收款地址、精确金额和确认数；确认成功后本页会自动进入订单页面。</p>
+  {isStablecoin && !pending.email ? (
+    <form method="POST" class="mb-6 space-y-4 rounded-lg border border-line bg-surface p-4">
+      <div>
+        <label class="mb-1 block text-xs font-medium text-muted" for="email">接收订单确认的邮箱</label>
+        <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" />
       </div>
-      <button type="button" data-refresh class="w-full rounded-md border border-line px-5 py-3 text-sm font-medium hover:border-brand hover:text-brand">我已付款，立即检查状态</button>
-      <a href="/cart" class="block text-center text-xs uppercase tracking-widest text-faint hover:text-brand">返回购物车</a>
+      <p class="text-xs text-muted">先保存邮箱后才会显示收款地址。这样链上自动确认订单时，系统可以同时发送订单确认和数字商品交付邮件。</p>
+      <button type="submit" class="w-full rounded-md bg-brand px-5 py-3 text-sm font-medium text-on-brand hover:bg-brand-hover">保存邮箱并继续付款</button>
+    </form>
+  ) : (
+    <div class="mb-6 rounded-lg border border-line bg-surface p-4 text-center">
+      {qrSvg && <div class="mx-auto mb-4 aspect-square w-full max-w-[16rem] rounded-lg bg-white p-2 [&>svg]:h-full [&>svg]:w-full" set:html={qrSvg} />}
+      <p class="mb-1 text-xs uppercase tracking-widest text-muted">{cfg.label}</p>
+      <p class="break-all rounded-md border border-line bg-white px-3 py-2 font-mono text-xs text-ink">{cfg.target}</p>
+      <button type="button" data-copy data-copy-value={cfg.target} class="mt-3 rounded-md border border-line px-3 py-2 text-xs font-medium uppercase tracking-wider text-muted hover:border-brand hover:text-brand">{cfg.copyLabel}</button>
+      <p class="mt-3 text-sm text-muted">{cfg.hint}</p>
+      <p class="mt-2 text-xs text-faint">订单号：<code class="rounded bg-white px-1">{orderMemo}</code></p>
+      {isStablecoin && pending.email && <p class="mt-2 text-xs text-faint">订单邮箱：{pending.email}</p>}
     </div>
+  )}
+
+  {isStablecoin ? (
+    pending.email ? (
+      <div class="space-y-3">
+        <div class="rounded-lg border border-line bg-surface px-4 py-4 text-center">
+          <p class="text-sm font-medium">等待链上确认</p>
+          <p class="mt-1 text-xs text-muted">付款后无需提交 Tx Hash。Cloudflare 定时任务会自动检查代币合约、收款地址、精确金额和确认数；确认成功后本页会自动进入订单页面。</p>
+        </div>
+        <button type="button" data-refresh class="w-full rounded-md border border-line px-5 py-3 text-sm font-medium hover:border-brand hover:text-brand">刷新付款状态</button>
+        <a href="/cart" class="block text-center text-xs uppercase tracking-widest text-faint hover:text-brand">返回购物车</a>
+      </div>
+    ) : null
   ) : (
     <form method="POST" class="space-y-4">
       <div><label class="mb-1 block text-xs font-medium text-muted" for="email">接收订单确认的邮箱</label><input id="email" name="email" type="email" value={pending.email ?? ''} autocomplete="email" required class="w-full rounded-md border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none" /></div>
