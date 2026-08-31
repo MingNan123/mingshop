@@ -69,12 +69,12 @@ const GUIDES: Record<string, Guide> = {
   },
   usdt: {
     title: 'Set up USDT automatic payments',
-    intro: 'Receive ERC-20 USDT directly to your own EVM wallet and automatically confirm matching payments on-chain.',
+    intro: 'Receive USDT directly to your own wallet using either TRON/TRC-20 or EVM/ERC-20 automatic verification.',
     steps: [
-      'Keep the store currency set to USD.',
-      'Open Admin → Stablecoins and choose an EVM/ERC-20 network. TRON/TRC-20 and Solana are not handled by this EVM verifier.',
-      'Enter your 0x receiving address, a trusted HTTPS RPC URL, the official USDT token contract for that exact network, its decimals, and the required confirmation count.',
-      'The Cloudflare Cron verifies confirmed Transfer logs and only auto-completes an order when the token, receiving address, exact amount, time window, and transaction uniqueness all match safely.',
+      'Keep the store currency set to USD and open Admin → Stablecoins.',
+      'For TRON, choose TRON / TRC-20, enter your T-address, keep or verify the official TRC-20 USDT contract, and add a TronGrid API Key. The key is encrypted in the Secret Vault.',
+      'For EVM, choose EVM / ERC-20 and enter the network, 0x receiving address, trusted HTTPS RPC URL, official USDT token contract, decimals, and confirmation count.',
+      'Cloudflare Cron checks confirmed incoming transfers and only auto-completes a uniquely matched order when token, receiving address, exact amount, time window, and transaction uniqueness all pass.',
     ],
   },
 };
