@@ -137,6 +137,9 @@ const METHOD: Record<string, { label: string; hint: string }> = {
   stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more' },
   lightning: { label: 'Pay with Lightning ⚡', hint: 'Instant — from any Lightning wallet' },
   opennode: { label: 'Pay with Bitcoin', hint: 'On-chain or Lightning (OpenNode)' },
+  alipay: { label: 'Pay with Alipay', hint: 'Direct transfer, no processor approval' },
+  wechatpay: { label: 'Pay with WeChat Pay', hint: 'Direct transfer, no processor approval' },
+  usdc: { label: 'Pay with USDC', hint: 'Stablecoin transfer to merchant wallet' },
   demo: { label: 'Demo checkout', hint: 'Simulated — places a real test order, no charge' },
 };
 ---

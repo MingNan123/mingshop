@@ -42,6 +42,33 @@ const GUIDES: Record<string, Guide> = {
       `Point its webhook at ${origin}/api/webhook/opennode, and set the default rail to OpenNode in Settings → Payments.`,
     ],
   },
+  alipay: {
+    title: 'Set up Alipay direct payments',
+    intro: 'Accept Alipay immediately by sending buyers to your own collection link or QR payload.',
+    steps: [
+      'Create or copy an Alipay merchant/personal collection link.',
+      'Paste it in Admin → Settings → Payments → Alipay payment URL.',
+      'Enable the Alipay direct method and optionally make it the default rail.',
+    ],
+  },
+  wechatpay: {
+    title: 'Set up WeChat Pay direct payments',
+    intro: 'Accept WeChat Pay immediately with a direct collection link.',
+    steps: [
+      'Create or copy a WeChat Pay collection link.',
+      'Paste it in Admin → Settings → Payments → WeChat Pay payment URL.',
+      'Enable the WeChat Pay direct method and optionally make it the default rail.',
+    ],
+  },
+  usdc: {
+    title: 'Set up USDC direct payments',
+    intro: 'Accept USDC transfers to your own wallet without a hosted checkout provider.',
+    steps: [
+      'Choose a network your customers can use, such as Polygon, Base, Ethereum, or Solana.',
+      'Paste the USDC receiving address and network in Admin → Settings → Payments.',
+      'Enable the USDC direct method and reconcile submitted transaction hashes in your wallet.',
+    ],
+  },
 };
 const guide = GUIDES[method] ?? null;
 ---

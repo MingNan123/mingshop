@@ -8,6 +8,7 @@ import { getLightningBackend } from './lightning';
 import { createOpenNodeProvider } from './opennode';
 import { createWaffoProvider, isWaffoConfigured } from './waffo';
 import { createDemoProvider } from './demo';
+import { createManualWalletProvider } from './manual-wallet';
 import { getSecret, vaultReady } from '../secrets/store';
 
 export type { PaymentProvider } from './provider';
@@ -18,17 +19,43 @@ export {
   RESERVATION_EXPIRY_GRACE_SECONDS,
 } from './provider';
 export { DEMO_CHECKOUT_TTL_SECONDS } from './demo';
+export { MANUAL_WALLET_CHECKOUT_TTL_SECONDS } from './manual-wallet';
 
 // 'demo' is a first-class method — a simulated checkout that's ALWAYS offered
 // (records a real, demo-tagged order). The real rails work only when configured.
-export type PaymentMethod = 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'demo';
-const ALL_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
+export type PaymentMethod =
+  | 'stripe'
+  | 'waffo'
+  | 'lightning'
+  | 'opennode'
+  | 'alipay'
+  | 'wechatpay'
+  | 'usdc'
+  | 'demo';
+const ALL_METHODS: PaymentMethod[] = [
+  'stripe',
+  'waffo',
+  'lightning',
+  'opennode',
+  'alipay',
+  'wechatpay',
+  'usdc',
+];
 // The buttons always presented at checkout. Each real rail works if configured,
 // else its button leads to setup instructions; demo always works.
-const OFFERED: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'demo'];
+const OFFERED: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'alipay', 'wechatpay', 'usdc', 'demo'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
-  return value === 'stripe' || value === 'waffo' || value === 'lightning' || value === 'opennode' || value === 'demo';
+  return (
+    value === 'stripe' ||
+    value === 'waffo' ||
+    value === 'lightning' ||
+    value === 'opennode' ||
+    value === 'alipay' ||
+    value === 'wechatpay' ||
+    value === 'usdc' ||
+    value === 'demo'
+  );
 }
 
 /**
@@ -49,6 +76,12 @@ export function isMethodAvailable(
       return isWaffoConfigured();
     case 'opennode':
       return has('opennode_api_key');
+    case 'alipay':
+      return !!settings.alipayPaymentUrl;
+    case 'wechatpay':
+      return !!settings.wechatpayPaymentUrl;
+    case 'usdc':
+      return !!settings.usdcAddress && !!settings.usdcNetwork;
     case 'lightning':
       return settings.lightningBackend === 'lnbits'
         ? !!settings.lnbitsUrl && has('lnbits_api_key')
@@ -96,7 +129,7 @@ export function enabledMethods(
 }
 
 /**
- * Methods the checkout UI shows as buttons — Card, Waffo, Lightning, Demo (plus
+ * Methods the checkout UI shows as buttons — Card, Waffo, Lightning, direct wallets, Demo (plus
  * any other configured rail), minus any the admin disabled. Unlike enabledMethods,
  * this keeps real rails visible when unconfigured so the UI can render setup links.
  */
@@ -108,7 +141,7 @@ export function offeredMethods(
   const extra = ALL_METHODS.filter(
     (m) => !OFFERED.includes(m) && isMethodAvailable(m, settings, vault),
   );
-  return (['stripe', 'waffo', 'lightning', ...extra, 'demo'] as PaymentMethod[]).filter((m) => !off.has(m));
+  return ([...OFFERED, ...extra] as PaymentMethod[]).filter((m) => !off.has(m));
 }
 
 /** Build a concrete payment provider. */
@@ -127,6 +160,11 @@ export async function getPaymentProvider(method?: PaymentMethod): Promise<Paymen
       if (!key) throw new Error('OpenNode is not configured.');
       return createOpenNodeProvider(env.DB, key, settings.opennodeApiUrl ?? undefined);
     }
+    case 'alipay':
+    case 'wechatpay':
+    case 'usdc':
+      if (!isMethodAvailable(m, settings)) throw new Error(`${m} is not configured.`);
+      return createManualWalletProvider(env.DB, m);
     case 'stripe':
     default: {
       const secretKey = await getSecret(env.DB, 'stripe_secret_key');
