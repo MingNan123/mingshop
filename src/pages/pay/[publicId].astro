@@ -3,7 +3,7 @@ export const prerender = false;
 import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
 import { getConfig } from '../../config';
-import { getPendingByPublicId } from '../../features/payments/lightning/pending';
+import { getPendingByPublicId, updatePendingEmail } from '../../features/payments/lightning/pending';
 import { getOrderByPublicId } from '../../features/orders/db';
 import { getStoreSettings } from '../../features/settings/db';
 import { isLegacyPublicId } from '../../features/ids/publicId.ts';
@@ -27,13 +27,14 @@ Astro.response.headers.set('cache-control', 'private, no-store');
 Astro.response.headers.set('referrer-policy', 'no-referrer');
 if (await getOrderByPublicId(env.DB, orderPublicId)) return Astro.redirect(`/order/${guestParam}`, 303);
 
-const pending = await getPendingByPublicId(env.DB, orderPublicId);
+let pending = await getPendingByPublicId(env.DB, orderPublicId);
 if (!pending) return new Response('未找到订单', { status: 404 });
 const settings = Astro.locals.settings ?? (await getStoreSettings(env.DB));
 if (pending.backend === 'demo') return new Response('演示结账已停用，请重新选择真实支付方式。', { status: 410 });
 
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
 const isManualWallet = ['alipay','wechatpay','usdc','usdt'].includes(pending.backend);
+const isStablecoin = pending.backend === 'usdc' || pending.backend === 'usdt';
 if (!isLightning && !isManualWallet) return Astro.redirect(`/order/${guestParam}`, 303);
 
 const payExpired = pending.status === 'expired' || (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now());
@@ -41,7 +42,12 @@ const ctx = Astro.locals.cfContext;
 const waitUntil = ctx ? ctx.waitUntil.bind(ctx) : undefined;
 let declined: string | null = null;
 
-if (isManualWallet && Astro.request.method === 'POST' && !payExpired) {
+if (isStablecoin && Astro.request.method === 'POST' && !payExpired) {
+  const form = await Astro.request.formData();
+  const saved = await updatePendingEmail(env.DB, pending.public_id, String(form.get('email') ?? ''));
+  if (!saved) declined = '请输入有效的接收订单确认邮箱。';
+  else pending = (await getPendingByPublicId(env.DB, orderPublicId)) ?? pending;
+} else if (isManualWallet && Astro.request.method === 'POST' && !payExpired) {
   const result = await settleManualWalletCheckout(pending, await Astro.request.formData(), Astro.url.origin, settings, waitUntil);
   if (result.settled) return Astro.redirect(`/order/${guestParam}`, 303);
   declined = result.declined ?? null;
