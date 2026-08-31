@@ -45,8 +45,8 @@ describe('getStoreSettings — logo', () => {
   });
 });
 
-describe('parseStoreSettings — direct payment rails', () => {
-  it('loads Alipay, WeChat Pay, and USDC direct-payment settings', () => {
+describe('parseStoreSettings — stablecoin checkout policy', () => {
+  it('keeps legacy direct-payment settings readable for historical records', () => {
     const settings = parseStoreSettings([
       { key: 'payment_provider', value: 'usdc' },
       { key: 'alipay_payment_url', value: 'https://qr.alipay.com/example' },
@@ -62,8 +62,11 @@ describe('parseStoreSettings — direct payment rails', () => {
     expect(settings.usdcNetwork).toBe('Polygon');
   });
 
-  it('recognizes direct rails as valid default providers', () => {
-    expect(parseStoreSettings([{ key: 'payment_provider', value: 'alipay' }]).paymentProvider).toBe('alipay');
-    expect(parseStoreSettings([{ key: 'payment_provider', value: 'wechatpay' }]).paymentProvider).toBe('wechatpay');
+  it('normalizes legacy default providers to USDT and preserves stablecoin defaults', () => {
+    expect(parseStoreSettings([{ key: 'payment_provider', value: 'alipay' }]).paymentProvider).toBe('usdt');
+    expect(parseStoreSettings([{ key: 'payment_provider', value: 'wechatpay' }]).paymentProvider).toBe('usdt');
+    expect(parseStoreSettings([{ key: 'payment_provider', value: 'stripe' }]).paymentProvider).toBe('usdt');
+    expect(parseStoreSettings([{ key: 'payment_provider', value: 'usdt' }]).paymentProvider).toBe('usdt');
+    expect(parseStoreSettings([{ key: 'payment_provider', value: 'usdc' }]).paymentProvider).toBe('usdc');
   });
 });
