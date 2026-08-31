@@ -1,0 +1,70 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getStoreSettings, setSetting } from '../../features/settings/db';
+import { CACHE_TAG } from '../../features/cache/tags';
+import { purgeCacheTags } from '../../features/cache/purge';
+
+let saved = false;
+let error = '';
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const clean = (name: string) => String(form.get(name) ?? '').trim();
+  const usdcAddress = clean('usdc_address');
+  const usdcNetwork = clean('usdc_network');
+  const usdtAddress = clean('usdt_address');
+  const usdtNetwork = clean('usdt_network');
+
+  if ((usdcAddress && !usdcNetwork) || (!usdcAddress && usdcNetwork)) {
+    error = 'USDC 必须同时填写收款地址和网络。';
+  } else if ((usdtAddress && !usdtNetwork) || (!usdtAddress && usdtNetwork)) {
+    error = 'USDT 必须同时填写收款地址和网络。';
+  } else {
+    await setSetting(env.DB, 'usdc_address', usdcAddress || null);
+    await setSetting(env.DB, 'usdc_network', usdcNetwork || null);
+    await setSetting(env.DB, 'usdt_address', usdtAddress || null);
+    await setSetting(env.DB, 'usdt_network', usdtNetwork || null);
+    await purgeCacheTags([CACHE_TAG.shell, CACHE_TAG.catalog]);
+    saved = true;
+  }
+}
+const settings = await getStoreSettings(env.DB);
+---
+
+<AdminLayout title="稳定币收款">
+  <div class="mx-auto max-w-3xl space-y-6">
+    <div>
+      <h1 class="text-2xl font-semibold">USDC / USDT 收款设置</h1>
+      <p class="mt-2 text-sm text-muted">商品金额由后台价格锁定。当前稳定币直收模式要求店铺币种为 USD，订单金额将按 1 USD = 1 USDC / USDT 显示。</p>
+    </div>
+
+    {saved && <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">设置已保存。</div>}
+    {error && <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+    <form method="POST" class="space-y-6">
+      <section class="rounded-lg border border-line bg-surface p-5">
+        <h2 class="text-lg font-medium">USDC</h2>
+        <p class="mt-1 text-xs text-muted">建议优先选择手续费较低且你钱包支持的网络，例如 Base、Polygon 或 Solana。收款网络必须与客户转账网络完全一致。</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm"><span class="mb-1 block font-medium">网络</span><input name="usdc_network" value={settings.usdcNetwork ?? ''} placeholder="例如 Base" class="w-full rounded-md border border-line px-3 py-2" /></label>
+          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">收款地址</span><input name="usdc_address" value={settings.usdcAddress ?? ''} placeholder="粘贴 USDC 收款地址" class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
+        </div>
+      </section>
+
+      <section class="rounded-lg border border-line bg-surface p-5">
+        <h2 class="text-lg font-medium">USDT</h2>
+        <p class="mt-1 text-xs text-muted">请填写你实际持有 USDT 的网络。不要把不同网络的地址混用；客户转错链可能无法恢复。</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm"><span class="mb-1 block font-medium">网络</span><input name="usdt_network" value={settings.usdtNetwork ?? ''} placeholder="例如 TRON / Ethereum / Arbitrum" class="w-full rounded-md border border-line px-3 py-2" /></label>
+          <label class="block text-sm sm:col-span-2"><span class="mb-1 block font-medium">收款地址</span><input name="usdt_address" value={settings.usdtAddress ?? ''} placeholder="粘贴 USDT 收款地址" class="w-full rounded-md border border-line px-3 py-2 font-mono text-xs" /></label>
+        </div>
+      </section>
+
+      <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        当前版本采用非托管直收：资金直接进入你的钱包。客户付款后提交 Tx Hash，系统记录订单；尚未接入链上节点自动确认，因此请在发货/交付前核对链上到账。
+      </div>
+      <button type="submit" class="rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-on-brand hover:bg-brand-hover">保存稳定币设置</button>
+    </form>
+  </div>
+</AdminLayout>
