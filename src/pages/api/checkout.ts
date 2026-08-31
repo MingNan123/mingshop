@@ -78,7 +78,7 @@ const MAX_JSON_BYTES = 64 * 1024;
 
 function reservationTtlSeconds(method: PaymentMethod): number {
   if (method === 'demo') return DEMO_CHECKOUT_TTL_SECONDS;
-  if (method === 'alipay' || method === 'wechatpay' || method === 'usdc') {
+  if (method === 'usdc' || method === 'usdt') {
     return MANUAL_WALLET_CHECKOUT_TTL_SECONDS;
   }
   if (method === 'lightning') {
@@ -208,18 +208,15 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     return redirect(`${errorPath}?error=${encodeURIComponent(msg)}`, 303);
   }
 
-  // The buyer picks a rail on the cart page (method buttons). An explicitly-chosen
-  // real rail that isn't configured → setup instructions (the cart links there too,
-  // this guards a crafted POST). Otherwise resolve to a usable method (demo always).
+  // New browser checkouts accept stablecoins only. Reject crafted posts for any
+  // retired rail instead of silently substituting the first available method.
   const requestedRaw = String(form.get('method') ?? '').trim();
   const requested = requestedRaw as PaymentMethod;
   const settings = await getStoreSettings(env.DB);
-  if (
-    requestedRaw &&
-    requestedRaw !== 'demo' &&
-    (['stripe', 'lightning', 'opennode', 'alipay', 'wechatpay', 'usdc'] as string[]).includes(requestedRaw) &&
-    !isMethodAvailable(requested, settings)
-  ) {
+  if (requestedRaw && requestedRaw !== 'usdc' && requestedRaw !== 'usdt') {
+    return redirect('/payment-setup', 303);
+  }
+  if (requestedRaw && !isMethodAvailable(requested, settings)) {
     return redirect(`/payment-setup?method=${encodeURIComponent(requestedRaw)}`, 303);
   }
   const available = enabledMethods(settings);
@@ -232,22 +229,16 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
 
   const cfg = getConfig();
 
-  // Lightning + shipping enabled: we must collect the address before we can total
-  // the order (zone-accurate shipping), so route to the own-checkout page. Carry the
-  // buy-now product + variant/extras so it prices the same line. Stripe & OpenNode
-  // collect/handle shipping on their own hosted page, so they continue below.
   const effectiveShipping = shippingFor(settings).config;
   // Digital-only baskets never collect an address or pay for delivery, whatever
   // the store's shipping setting says.
   const shipment = shipmentWeightFor(lines);
   const shippingApplies = effectiveShipping.enabled && shipment.shippingRequired;
 
-  // Rails that cannot collect a destination on their own hosted page go through the
-  // in-app step first: Lightning has no hosted page, OpenNode's ignores addresses,
-  // and Demo has none. Without this, OpenNode charged no shipping at all and Demo
-  // billed whichever rate sorted first — both silently wrong once a merchant can
-  // edit rates. Stripe collects the address itself and continues below.
-  const IN_APP_SHIPPING_RAILS = ['lightning', 'opennode', 'alipay', 'wechatpay', 'usdc', 'demo'];
+  // USDC and USDT are in-app payment rails. Physical orders must collect the
+  // destination and choose a server-priced shipping option before a pending
+  // stablecoin payment is created.
+  const IN_APP_SHIPPING_RAILS = ['usdc', 'usdt'];
   if (IN_APP_SHIPPING_RAILS.includes(selected) && shippingApplies) {
     const params = new URLSearchParams({ method: selected });
     if (productPublicId) {
@@ -729,12 +720,9 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         }
       : undefined;
 
-  // The JSON API has no interactive step, so every rail that cannot collect an
-  // address on a hosted page takes it as `ship_to` here: the agent supplies the
-  // address, we price THAT country, and the chosen rate travels with the charge.
-  // Without this, OpenNode and Demo reached their adapters with an unselected list
-  // and charged nothing for shipping.
-  const IN_APP_JSON_RAILS = ['lightning', 'opennode', 'alipay', 'wechatpay', 'usdc', 'demo'];
+  // The JSON API has no interactive step. Both supported stablecoins require a
+  // concrete `ship_to` before a physical order is priced and a payment is created.
+  const IN_APP_JSON_RAILS = ['usdc', 'usdt'];
   const needsShipTo = shippingOn && IN_APP_JSON_RAILS.includes(method);
   let shipTo: ReturnType<typeof parseShipTo> = null;
   let chosen: { label: string; amountCents: number; pickup?: boolean } | undefined;
