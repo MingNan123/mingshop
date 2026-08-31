@@ -12,6 +12,7 @@
 
 CREATE TABLE IF NOT EXISTS media (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id     TEXT,
   image_key     TEXT    NOT NULL UNIQUE,
   original_name TEXT    NOT NULL,
   -- Nullable: rows backfilled below come from R2 objects that cannot be
@@ -27,6 +28,7 @@ CREATE INDEX IF NOT EXISTS media_created
 
 CREATE TABLE IF NOT EXISTS pages (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id     TEXT,
   title         TEXT    NOT NULL,
   slug          TEXT    NOT NULL UNIQUE,
   body_markdown TEXT    NOT NULL DEFAULT '',

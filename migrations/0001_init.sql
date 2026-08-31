@@ -2,9 +2,15 @@
 -- Migrations are additive and non-destructive: no DROP, IF NOT EXISTS so a
 -- re-run on an existing DB is a safe no-op. Apply with:
 --   wrangler d1 migrations apply minshop-db --local   (or --remote)
+--
+-- public_id / label_url are included in the clean bootstrap because older
+-- repositories contained duplicate 0033 migration numbers and a clean D1 could
+-- skip that historical ALTER migration entirely. Existing databases that already
+-- applied 0001 are unaffected by these CREATE TABLE definitions.
 
 CREATE TABLE IF NOT EXISTS products (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id     TEXT,
   name          TEXT    NOT NULL,
   description   TEXT,
   price_cents   INTEGER NOT NULL,
@@ -22,7 +28,8 @@ CREATE TABLE IF NOT EXISTS orders (
   amount_total_cents  INTEGER NOT NULL,
   currency            TEXT    NOT NULL DEFAULT 'usd',
   status              TEXT    NOT NULL DEFAULT 'pending',
-  created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+  created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+  label_url           TEXT
 );
 
 CREATE TABLE IF NOT EXISTS order_items (

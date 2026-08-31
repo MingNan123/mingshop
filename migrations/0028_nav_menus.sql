@@ -14,6 +14,7 @@
 
 CREATE TABLE IF NOT EXISTS menu_items (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id   TEXT,
   location    TEXT    NOT NULL CHECK (location IN ('header', 'footer')),
   target_type TEXT    NOT NULL CHECK (
                 target_type IN ('home', 'catalog', 'page', 'product', 'category')

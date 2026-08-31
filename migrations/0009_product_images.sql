@@ -5,6 +5,7 @@
 
 CREATE TABLE IF NOT EXISTS product_images (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id  TEXT,
   product_id INTEGER NOT NULL REFERENCES products(id),
   image_key  TEXT    NOT NULL,
   position   INTEGER NOT NULL DEFAULT 0

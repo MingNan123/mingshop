@@ -1,13 +1,16 @@
 -- 0004: nested categories + many-to-many product links. Additive.
 -- categories.parent_id is a self-reference (NULL = top level) → arbitrary-depth tree.
 -- product_categories is the M:N join (a product can sit in several categories).
+-- public_id is part of the clean bootstrap because the historical 0033 public-ID
+-- migration can be skipped when duplicate migration numbers are present.
 
 CREATE TABLE IF NOT EXISTS categories (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT NOT NULL,
   slug       TEXT NOT NULL UNIQUE,
   parent_id  INTEGER REFERENCES categories(id),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  public_id  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
 
