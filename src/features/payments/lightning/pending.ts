@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import type { PaidOrderInput, OrderItemInput, ShippingAddress } from '../../orders/db';
-import { stablecoinSnapshot, type StablecoinNetworkProfile, type StablecoinToken } from '../stablecoin-networks';
+import { stablecoinSnapshot, type StablecoinNetworkProfile, type StablecoinToken } from '../stablecoin-networks.ts';
 
 export interface PendingPayment {
   id: number;
