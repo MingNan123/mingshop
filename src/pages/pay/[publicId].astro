@@ -5,14 +5,17 @@ import Layout from '../../layouts/Layout.astro';
 import { getConfig } from '../../config';
 import { getPendingByPublicId } from '../../features/payments/lightning/pending';
 import { getOrderByPublicId } from '../../features/orders/db';
+import { getStoreSettings } from '../../features/settings/db';
 import { isLegacyPublicId } from '../../features/ids/publicId.ts';
 import { isAccessToken } from '../../features/ids/token.ts';
 import { resolveAccessToken } from '../../features/orders/guestAccess.ts';
 import DemoCheckout from '../../features/payments/checkout/DemoCheckout.astro';
 import LightningPay from '../../features/payments/checkout/LightningPay.astro';
+import ManualWalletCheckout from '../../features/payments/checkout/ManualWalletCheckout.astro';
 import {
   settleDemoCheckout,
   settleLightningOnLoad,
+  settleManualWalletCheckout,
 } from '../../features/payments/checkout/settle';
 
 const guestParam = Astro.params.publicId;
@@ -34,10 +37,15 @@ if (await getOrderByPublicId(env.DB, orderPublicId)) {
 
 const pending = await getPendingByPublicId(env.DB, orderPublicId);
 if (!pending) return new Response('未找到订单', { status: 404 });
+const settings = Astro.locals.settings ?? (await getStoreSettings(env.DB));
 
 const isDemo = pending.backend === 'demo';
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
-if (!isDemo && !isLightning) return Astro.redirect(`/order/${guestParam}`, 303);
+const isManualWallet =
+  pending.backend === 'alipay' ||
+  pending.backend === 'wechatpay' ||
+  pending.backend === 'usdc';
+if (!isDemo && !isLightning && !isManualWallet) return Astro.redirect(`/order/${guestParam}`, 303);
 
 const payExpired =
   pending.status === 'expired' ||
@@ -52,7 +60,19 @@ if (isDemo && Astro.request.method === 'POST' && !payExpired) {
     pending,
     await Astro.request.formData(),
     Astro.url.origin,
-    Astro.locals.settings,
+    settings,
+    waitUntil,
+  );
+  if (result.settled) return Astro.redirect(`/order/${guestParam}`, 303);
+  declined = result.declined ?? null;
+}
+
+if (isManualWallet && Astro.request.method === 'POST' && !payExpired) {
+  const result = await settleManualWalletCheckout(
+    pending,
+    await Astro.request.formData(),
+    Astro.url.origin,
+    settings,
     waitUntil,
   );
   if (result.settled) return Astro.redirect(`/order/${guestParam}`, 303);
@@ -62,17 +82,20 @@ if (isDemo && Astro.request.method === 'POST' && !payExpired) {
 if (
   isLightning &&
   !payExpired &&
-  (await settleLightningOnLoad(pending, Astro.url.origin, Astro.locals.settings, waitUntil))
+  (await settleLightningOnLoad(pending, Astro.url.origin, settings, waitUntil))
 ) {
   return Astro.redirect(`/order/${guestParam}`, 303);
 }
 
 const lightningExpired = isLightning && payExpired;
+const manualWalletExpired = isManualWallet && payExpired;
 
 const { storeName } = getConfig();
-const title = isDemo ? '模拟支付' : '使用闪电网络支付';
+const title = isDemo ? '模拟支付' : isManualWallet ? '直连支付' : '使用闪电网络支付';
 const description = isDemo
   ? `${storeName} 的模拟支付页面。`
+  : isManualWallet
+    ? `使用直连收款方式向 ${storeName} 支付。`
   : `使用比特币闪电网络向 ${storeName} 支付。`;
 ---
 
@@ -85,4 +108,13 @@ const description = isDemo
   )}
   {isDemo && !payExpired && <DemoCheckout pending={pending} declined={declined} />}
   {isLightning && <LightningPay pending={pending} expired={lightningExpired} />}
+  {isManualWallet && manualWalletExpired && (
+    <Fragment>
+      <h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">支付请求已过期</h1>
+      <p class="text-muted">本次支付请求已过期，请重新发起订单。</p>
+    </Fragment>
+  )}
+  {isManualWallet && !manualWalletExpired && (
+    <ManualWalletCheckout pending={pending} settings={settings} declined={declined} />
+  )}
 </Layout>

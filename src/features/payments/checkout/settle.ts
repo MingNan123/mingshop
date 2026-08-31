@@ -58,6 +58,35 @@ export async function settleDemoCheckout(
   return { declined: DECLINE[outcome] ?? DECLINE.decline };
 }
 
+export async function settleManualWalletCheckout(
+  pending: PendingPayment,
+  form: FormData,
+  origin: string,
+  settings?: StoreSettings,
+  waitUntil?: (promise: Promise<unknown>) => void,
+): Promise<DemoSettleResult> {
+  if (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now()) {
+    return { declined: 'This payment request has expired.' };
+  }
+  const email = resolveRequiredOrderEmail(String(form.get('email') ?? ''), pending.email);
+  if (!email) return { declined: 'A valid email is required.' };
+  const proof = String(form.get('proof') ?? '').trim().slice(0, 200);
+  if (!proof) return { declined: 'Enter the payment reference or transaction hash.' };
+  const order = {
+    ...pendingToPaidOrder(pending),
+    email,
+    providerPaymentId: proof,
+  };
+  await recordPaidWebhookOrder(
+    { type: `${pending.backend}.confirmed`, order },
+    origin,
+    pending.backend,
+    settings,
+    waitUntil,
+  );
+  return { settled: true };
+}
+
 /**
  * Settle-on-load for Lightning: poll the node directly (authoritative, so the page
  * works even with no public webhook). Records + marks settled when paid. Returns

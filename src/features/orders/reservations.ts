@@ -222,7 +222,7 @@ export async function markInventoryReservationTerminal(
 }
 
 /**
- * Reclaim expired self-rendered Lightning and Demo payments before a new hold.
+ * Reclaim expired self-rendered Lightning, direct-wallet, and Demo payments before a new hold.
  * Hosted methods release only from verified provider expiry/failure webhooks: a
  * payment may have completed before local expiry while its webhook is delayed.
  */
@@ -233,7 +233,7 @@ export async function releaseExpiredReservations(
 ): Promise<void> {
   const { results } = await db
     .prepare(
-      "SELECT public_id FROM checkout_reservations WHERE payment_method IN ('lightning', 'demo') AND status = 'active' AND expires_at <= datetime('now') ORDER BY expires_at LIMIT ?",
+      "SELECT public_id FROM checkout_reservations WHERE payment_method IN ('lightning', 'alipay', 'wechatpay', 'usdc', 'demo') AND status = 'active' AND expires_at <= datetime('now') ORDER BY expires_at LIMIT ?",
     )
     .bind(limit)
     .all<{ public_id: string }>();
@@ -258,7 +258,7 @@ export async function expireSelfRenderedReservation(
   const eligible = await db
     .prepare(
       `SELECT public_id FROM checkout_reservations
-       WHERE public_id = ? AND payment_method IN ('lightning', 'demo')
+       WHERE public_id = ? AND payment_method IN ('lightning', 'alipay', 'wechatpay', 'usdc', 'demo')
          AND status = 'active' AND expires_at <= datetime('now')`,
     )
     .bind(publicId)

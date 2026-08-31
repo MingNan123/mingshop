@@ -25,6 +25,7 @@ import {
   OPENNODE_CHECKOUT_TTL_SECONDS,
   RESERVATION_EXPIRY_GRACE_SECONDS,
   DEMO_CHECKOUT_TTL_SECONDS,
+  MANUAL_WALLET_CHECKOUT_TTL_SECONDS,
 } from '../../features/payments';
 import { getStoreSettings } from '../../features/settings/db';
 import { createConfigRatesCalculator } from '../../features/shipping/calculator';
@@ -77,6 +78,9 @@ const MAX_JSON_BYTES = 64 * 1024;
 
 function reservationTtlSeconds(method: PaymentMethod): number {
   if (method === 'demo') return DEMO_CHECKOUT_TTL_SECONDS;
+  if (method === 'alipay' || method === 'wechatpay' || method === 'usdc') {
+    return MANUAL_WALLET_CHECKOUT_TTL_SECONDS;
+  }
   if (method === 'lightning') {
     return (
       getConfig().payments.lightning.invoiceExpiryMinutes * 60 +
@@ -213,7 +217,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   if (
     requestedRaw &&
     requestedRaw !== 'demo' &&
-    (['stripe', 'lightning', 'opennode'] as string[]).includes(requestedRaw) &&
+    (['stripe', 'lightning', 'opennode', 'alipay', 'wechatpay', 'usdc'] as string[]).includes(requestedRaw) &&
     !isMethodAvailable(requested, settings)
   ) {
     return redirect(`/payment-setup?method=${encodeURIComponent(requestedRaw)}`, 303);
@@ -243,7 +247,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // and Demo has none. Without this, OpenNode charged no shipping at all and Demo
   // billed whichever rate sorted first — both silently wrong once a merchant can
   // edit rates. Stripe collects the address itself and continues below.
-  const IN_APP_SHIPPING_RAILS = ['lightning', 'opennode', 'demo'];
+  const IN_APP_SHIPPING_RAILS = ['lightning', 'opennode', 'alipay', 'wechatpay', 'usdc', 'demo'];
   if (IN_APP_SHIPPING_RAILS.includes(selected) && shippingApplies) {
     const params = new URLSearchParams({ method: selected });
     if (productPublicId) {
@@ -730,7 +734,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   // address, we price THAT country, and the chosen rate travels with the charge.
   // Without this, OpenNode and Demo reached their adapters with an unselected list
   // and charged nothing for shipping.
-  const IN_APP_JSON_RAILS = ['lightning', 'opennode', 'demo'];
+  const IN_APP_JSON_RAILS = ['lightning', 'opennode', 'alipay', 'wechatpay', 'usdc', 'demo'];
   const needsShipTo = shippingOn && IN_APP_JSON_RAILS.includes(method);
   let shipTo: ReturnType<typeof parseShipTo> = null;
   let chosen: { label: string; amountCents: number; pickup?: boolean } | undefined;

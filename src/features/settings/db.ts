@@ -50,6 +50,10 @@ export type SettingKey =
   | 'lnbits_url'
   | 'phoenixd_url'
   | 'opennode_api_url'
+  | 'alipay_payment_url'
+  | 'wechatpay_payment_url'
+  | 'usdc_address'
+  | 'usdc_network'
   | `enc:${string}`;
 
 export type FeatureKey = 'cart_enabled' | 'buy_now_enabled';
@@ -83,11 +87,15 @@ export interface StoreSettings {
   weightUnit: WeightUnit;
   turnstileEnabled: boolean;
   turnstileSiteKey: string | null;
-  paymentProvider: 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'demo';
+  paymentProvider: 'stripe' | 'waffo' | 'lightning' | 'opennode' | 'alipay' | 'wechatpay' | 'usdc' | 'demo';
   lightningBackend: 'phoenixd' | 'lnbits';
   lnbitsUrl: string | null;
   phoenixdUrl: string | null;
   opennodeApiUrl: string | null;
+  alipayPaymentUrl: string | null;
+  wechatpayPaymentUrl: string | null;
+  usdcAddress: string | null;
+  usdcNetwork: string | null;
 }
 
 export async function getSetting(db: D1Database, key: SettingKey): Promise<string | null> {
@@ -170,12 +178,19 @@ export function parseStoreSettings(
       map.get('payment_provider') === 'waffo' ? 'waffo'
       : map.get('payment_provider') === 'lightning' ? 'lightning'
       : map.get('payment_provider') === 'opennode' ? 'opennode'
+      : map.get('payment_provider') === 'alipay' ? 'alipay'
+      : map.get('payment_provider') === 'wechatpay' ? 'wechatpay'
+      : map.get('payment_provider') === 'usdc' ? 'usdc'
       : map.get('payment_provider') === 'demo' ? 'demo'
       : 'stripe',
     lightningBackend: map.get('lightning_backend') === 'lnbits' ? 'lnbits' : 'phoenixd',
     lnbitsUrl: map.get('lnbits_url') ?? null,
     phoenixdUrl: map.get('phoenixd_url') ?? null,
     opennodeApiUrl: map.get('opennode_api_url') ?? null,
+    alipayPaymentUrl: map.get('alipay_payment_url') ?? null,
+    wechatpayPaymentUrl: map.get('wechatpay_payment_url') ?? null,
+    usdcAddress: map.get('usdc_address') ?? null,
+    usdcNetwork: map.get('usdc_network') ?? null,
   };
 }
 

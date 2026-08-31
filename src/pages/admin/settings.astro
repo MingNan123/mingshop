@@ -300,6 +300,11 @@ if (Astro.request.method === 'POST') {
   } else if (action === 'save_opennode') {
     await setSetting(env.DB, 'opennode_api_url', String(form.get('opennode_api_url') ?? '').trim() || null);
     await applySecrets(['opennode_api_key']);
+  } else if (action === 'save_direct_wallets') {
+    await setSetting(env.DB, 'alipay_payment_url', String(form.get('alipay_payment_url') ?? '').trim() || null);
+    await setSetting(env.DB, 'wechatpay_payment_url', String(form.get('wechatpay_payment_url') ?? '').trim() || null);
+    await setSetting(env.DB, 'usdc_address', String(form.get('usdc_address') ?? '').trim() || null);
+    await setSetting(env.DB, 'usdc_network', String(form.get('usdc_network') ?? '').trim() || null);
   }
   // Admin saves are deliberately coarse and infrequent. Purge both public
   // dependency roots after the write rather than risk a newly added setting
@@ -445,6 +450,9 @@ const paymentMethods: { m: PaymentMethod; label: string }[] = [
   { m: 'stripe', label: 'Card (Stripe)' },
   { m: 'lightning', label: 'Lightning' },
   { m: 'opennode', label: 'Bitcoin (OpenNode)' },
+  { m: 'alipay', label: 'Alipay direct' },
+  { m: 'wechatpay', label: 'WeChat Pay direct' },
+  { m: 'usdc', label: 'USDC direct' },
   { m: 'demo', label: 'Demo checkout' },
 ];
 const pmRows = paymentMethods.map((r) => {
@@ -460,6 +468,10 @@ const payments = {
   lnbitsUrl: settings.lnbitsUrl ?? '',
   phoenixdUrl: settings.phoenixdUrl ?? '',
   opennodeApiUrl: settings.opennodeApiUrl ?? '',
+  alipayPaymentUrl: settings.alipayPaymentUrl ?? '',
+  wechatpayPaymentUrl: settings.wechatpayPaymentUrl ?? '',
+  usdcAddress: settings.usdcAddress ?? '',
+  usdcNetwork: settings.usdcNetwork ?? 'Polygon',
 };
 
 // Encrypted key vault (features/secrets). Keys are write-only — stored AES-GCM in
@@ -1079,6 +1091,122 @@ const sections = [
             <input type="url" name="opennode_api_url" value={payments.opennodeApiUrl} placeholder="(blank = live)" class="w-64 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
           </label>
           <SecretField name="opennode_api_key" label="API key" hint="from the OpenNode dashboard" storedInD1={inD1('opennode_api_key')} vault={vault} />
+          <button type="submit" class="mt-1 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">
+            Save
+          </button>
+        </form>
+      </div>
+
+      {/* Alipay direct */}
+      <div class="rounded-lg border border-gray-200 bg-white p-4">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p class="font-medium">Alipay direct</p>
+            <p class={pmMap.alipay.installed ? 'text-xs text-gray-500' : 'text-xs text-amber-700'}>
+              {pmMap.alipay.installed ? 'Live' : 'Add an Alipay payment URL to go live'}
+            </p>
+          </div>
+          {pmMap.alipay.installed && <MethodToggle method="alipay" enabled={pmMap.alipay.enabled} label="Alipay direct" />}
+        </div>
+        <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
+          <input type="hidden" name="_action" value="save_direct_wallets" />
+          <input type="hidden" name="wechatpay_payment_url" value={payments.wechatpayPaymentUrl} />
+          <input type="hidden" name="usdc_address" value={payments.usdcAddress} />
+          <input type="hidden" name="usdc_network" value={payments.usdcNetwork} />
+          <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+            Alipay payment URL
+            <input
+              type="url"
+              name="alipay_payment_url"
+              value={payments.alipayPaymentUrl}
+              placeholder="https://qr.alipay.com/..."
+              class="w-96 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+            />
+          </label>
+          <p class="text-xs text-gray-500">
+            Buyers scan/open this link, pay the order total, then submit their payment reference on your checkout page.
+          </p>
+          <button type="submit" class="mt-1 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">
+            Save
+          </button>
+        </form>
+      </div>
+
+      {/* WeChat Pay direct */}
+      <div class="rounded-lg border border-gray-200 bg-white p-4">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p class="font-medium">WeChat Pay direct</p>
+            <p class={pmMap.wechatpay.installed ? 'text-xs text-gray-500' : 'text-xs text-amber-700'}>
+              {pmMap.wechatpay.installed ? 'Live' : 'Add a WeChat Pay payment URL to go live'}
+            </p>
+          </div>
+          {pmMap.wechatpay.installed && <MethodToggle method="wechatpay" enabled={pmMap.wechatpay.enabled} label="WeChat Pay direct" />}
+        </div>
+        <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
+          <input type="hidden" name="_action" value="save_direct_wallets" />
+          <input type="hidden" name="alipay_payment_url" value={payments.alipayPaymentUrl} />
+          <input type="hidden" name="usdc_address" value={payments.usdcAddress} />
+          <input type="hidden" name="usdc_network" value={payments.usdcNetwork} />
+          <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+            WeChat Pay payment URL
+            <input
+              type="url"
+              name="wechatpay_payment_url"
+              value={payments.wechatpayPaymentUrl}
+              placeholder="weixin://wxpay/... or https://..."
+              class="w-96 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+            />
+          </label>
+          <p class="text-xs text-gray-500">
+            Buyers scan/open this link, pay the order total, then submit their payment reference on your checkout page.
+          </p>
+          <button type="submit" class="mt-1 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">
+            Save
+          </button>
+        </form>
+      </div>
+
+      {/* USDC direct */}
+      <div class="rounded-lg border border-gray-200 bg-white p-4">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p class="font-medium">USDC direct</p>
+            <p class={pmMap.usdc.installed ? 'text-xs text-gray-500' : 'text-xs text-amber-700'}>
+              {pmMap.usdc.installed ? 'Live' : 'Add a receiving address and network to go live'}
+            </p>
+          </div>
+          {pmMap.usdc.installed && <MethodToggle method="usdc" enabled={pmMap.usdc.enabled} label="USDC direct" />}
+        </div>
+        <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
+          <input type="hidden" name="_action" value="save_direct_wallets" />
+          <input type="hidden" name="alipay_payment_url" value={payments.alipayPaymentUrl} />
+          <input type="hidden" name="wechatpay_payment_url" value={payments.wechatpayPaymentUrl} />
+          <div class="grid gap-3 sm:grid-cols-[1fr_12rem]">
+            <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+              USDC receiving address
+              <input
+                type="text"
+                name="usdc_address"
+                value={payments.usdcAddress}
+                placeholder="0x... or Solana address"
+                class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+              Network
+              <input
+                type="text"
+                name="usdc_network"
+                value={payments.usdcNetwork}
+                placeholder="Polygon"
+                class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+              />
+            </label>
+          </div>
+          <p class="text-xs text-gray-500">
+            Buyers send USDC on this network, then submit the transaction hash or payment reference on your checkout page.
+          </p>
           <button type="submit" class="mt-1 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">
             Save
           </button>

@@ -28,9 +28,11 @@ const themeStamp = {
   hooks: {
     'astro:build:done': async () => {
       const { writeFileSync, mkdirSync } = await import('node:fs');
-      mkdirSync(new URL('./dist', import.meta.url).pathname, { recursive: true });
+      const { fileURLToPath } = await import('node:url');
+      const distDir = fileURLToPath(new URL('./dist', import.meta.url));
+      mkdirSync(distDir, { recursive: true });
       writeFileSync(
-        new URL('./dist/theme.json', import.meta.url).pathname,
+        fileURLToPath(new URL('./dist/theme.json', import.meta.url)),
         `${JSON.stringify({ theme: theme.id }, null, 2)}\n`,
       );
     },
