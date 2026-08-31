@@ -3,7 +3,8 @@ export const prerender = false;
 import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
 import { getConfig } from '../../config';
-import { getPendingByPublicId, updatePendingEmail } from '../../features/payments/lightning/pending';
+import { getPendingByPublicId, selectPendingStablecoinNetwork } from '../../features/payments/lightning/pending';
+import { enabledStablecoinProfiles, loadStablecoinProfiles } from '../../features/payments/stablecoin-networks';
 import { getOrderByPublicId } from '../../features/orders/db';
 import { getStoreSettings } from '../../features/settings/db';
 import { isLegacyPublicId } from '../../features/ids/publicId.ts';
@@ -37,16 +38,30 @@ const isManualWallet = ['alipay','wechatpay','usdc','usdt'].includes(pending.bac
 const isStablecoin = pending.backend === 'usdc' || pending.backend === 'usdt';
 if (!isLightning && !isManualWallet) return Astro.redirect(`/order/${guestParam}`, 303);
 
+const stablecoinNetworks = isStablecoin
+  ? enabledStablecoinProfiles(await loadStablecoinProfiles(env.DB), pending.backend)
+  : [];
 const payExpired = pending.status === 'expired' || (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now());
 const ctx = Astro.locals.cfContext;
 const waitUntil = ctx ? ctx.waitUntil.bind(ctx) : undefined;
 let declined: string | null = null;
 
 if (isStablecoin && Astro.request.method === 'POST' && !payExpired) {
-  const form = await Astro.request.formData();
-  const saved = await updatePendingEmail(env.DB, pending.public_id, String(form.get('email') ?? ''));
-  if (!saved) declined = '请输入有效的接收订单确认邮箱。';
-  else pending = (await getPendingByPublicId(env.DB, orderPublicId)) ?? pending;
+  if (pending.stablecoin_network_snapshot) {
+    declined = '本订单的付款网络已经锁定，不能再切换网络。';
+  } else {
+    const form = await Astro.request.formData();
+    const networkId = String(form.get('network_id') ?? '').trim();
+    const profile = stablecoinNetworks.find((p) => p.id === networkId) ?? null;
+    const email = pending.email ?? String(form.get('email') ?? '').trim();
+    if (!profile) declined = '请选择商家已启用的付款网络。';
+    else if (!email) declined = '请输入有效的接收订单确认邮箱。';
+    else {
+      const selected = await selectPendingStablecoinNetwork(env.DB, pending.public_id, pending.backend, profile, email);
+      if (!selected) declined = '无法锁定付款网络，请重新选择。';
+      else pending = (await getPendingByPublicId(env.DB, orderPublicId)) ?? pending;
+    }
+  }
 } else if (isManualWallet && Astro.request.method === 'POST' && !payExpired) {
   const result = await settleManualWalletCheckout(pending, await Astro.request.formData(), Astro.url.origin, settings, waitUntil);
   if (result.settled) return Astro.redirect(`/order/${guestParam}`, 303);
@@ -57,12 +72,12 @@ if (isLightning && !payExpired && (await settleLightningOnLoad(pending, Astro.ur
 }
 
 const { storeName } = getConfig();
-const title = isManualWallet ? '直连支付' : '使用闪电网络支付';
-const description = isManualWallet ? `使用直连收款方式向 ${storeName} 支付。` : `使用比特币闪电网络向 ${storeName} 支付。`;
+const title = isStablecoin ? `${pending.backend.toUpperCase()} 支付` : isManualWallet ? '直连支付' : '使用闪电网络支付';
+const description = isStablecoin ? `选择商家允许的网络并使用 ${pending.backend.toUpperCase()} 向 ${storeName} 支付。` : isManualWallet ? `使用直连收款方式向 ${storeName} 支付。` : `使用比特币闪电网络向 ${storeName} 支付。`;
 ---
 
 <Layout title={title} description={description}>
   {isLightning && <LightningPay pending={pending} expired={payExpired} />}
   {isManualWallet && payExpired && <Fragment><h1 class="mb-2 font-serif text-3xl tracking-tight sm:text-4xl">支付请求已过期</h1><p class="text-muted">本次支付请求已过期，请重新发起订单。</p></Fragment>}
-  {isManualWallet && !payExpired && <ManualWalletCheckout pending={pending} settings={settings} declined={declined} />}
+  {isManualWallet && !payExpired && <ManualWalletCheckout pending={pending} settings={settings} networks={stablecoinNetworks} declined={declined} />}
 </Layout>
