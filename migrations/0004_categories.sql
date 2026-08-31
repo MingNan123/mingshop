@@ -1,13 +1,17 @@
 -- 0004: nested categories + many-to-many product links. Additive.
 -- categories.parent_id is a self-reference (NULL = top level) → arbitrary-depth tree.
 -- product_categories is the M:N join (a product can sit in several categories).
+-- public_id belongs in the original CREATE TABLE so clean installs match the
+-- runtime category model. Existing production databases that already applied
+-- 0004 are not altered by this historical bootstrap correction.
 
 CREATE TABLE IF NOT EXISTS categories (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT NOT NULL,
   slug       TEXT NOT NULL UNIQUE,
   parent_id  INTEGER REFERENCES categories(id),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  public_id  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
 
