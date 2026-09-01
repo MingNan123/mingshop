@@ -95,8 +95,8 @@ async function freshDb({ seedBefore } = {}) {
   // matches zero rows and passes while proving nothing about the upgrade path.
   if (seedBefore) await seedBefore(db);
   for (const stmt of statements(MIGRATION)) await db.exec(stmt.replace(/\n\s*/g, ' '));
-  // 0033 adds public_id after 0028; the creation path writes it, so mirror it.
-  await db.exec('ALTER TABLE menu_items ADD COLUMN public_id TEXT');
+  // 0028 now creates menu_items.public_id directly so clean installs match the
+  // runtime navigation model. No later ALTER is needed in this hand-rolled test.
   return db;
 }
 
