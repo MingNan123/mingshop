@@ -3,7 +3,7 @@ name: Verify
 on:
   pull_request:
   push:
-    branches: [main, add-usdc-usdt-payments]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,6 +12,10 @@ permissions:
 concurrency:
   group: verify-${{ github.ref }}
   cancel-in-progress: true
+
+# Production deployment is handled by the connected Cloudflare Workers Git integration.
+# Keep this workflow focused on CI so missing duplicate GitHub Actions deploy credentials
+# cannot turn a successful verification/deployment into a false-red workflow run.
 
 jobs:
   verify:
@@ -98,40 +102,3 @@ jobs:
             wrangler.template.jsonc > wrangler.jsonc
       - name: Verify the theme builds and honours the contract
         run: npm run verify:theme
-
-  deploy:
-    name: Deploy production to Cloudflare
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [verify, themes]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' && (needs.themes.result == 'success' || needs.themes.result == 'skipped')
-    permissions:
-      contents: read
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - name: Install storefront dependencies
-        run: npm ci --no-audit --no-fund
-
-      - name: Build production storefront
-        run: npm run build
-
-      - name: Apply production D1 migrations
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply minshop-db --remote
-
-      - name: Deploy production Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
