@@ -7,7 +7,6 @@ import { createLightningProvider } from './lightning-provider';
 import { getLightningBackend } from './lightning';
 import { createOpenNodeProvider } from './opennode';
 import { createWaffoProvider, isWaffoConfigured } from './waffo';
-import { createDemoProvider } from './demo';
 import { createManualWalletProvider } from './manual-wallet';
 import { getSecret, vaultReady } from '../secrets/store';
 
@@ -18,11 +17,14 @@ export {
   OPENNODE_CHECKOUT_TTL_SECONDS,
   RESERVATION_EXPIRY_GRACE_SECONDS,
 } from './provider';
-export { DEMO_CHECKOUT_TTL_SECONDS } from './demo';
 export { MANUAL_WALLET_CHECKOUT_TTL_SECONDS } from './manual-wallet';
 
-// 'demo' is a first-class method — a simulated checkout that's ALWAYS offered
-// (records a real, demo-tagged order). The real rails work only when configured.
+/**
+ * Deprecated compatibility value for old in-flight code paths. Demo is never
+ * offered or available, so new checkouts cannot select it.
+ */
+export const DEMO_CHECKOUT_TTL_SECONDS = 0;
+
 export type PaymentMethod =
   | 'stripe'
   | 'waffo'
@@ -32,7 +34,9 @@ export type PaymentMethod =
   | 'wechatpay'
   | 'usdc'
   | 'demo';
-const ALL_METHODS: PaymentMethod[] = [
+
+type ActivePaymentMethod = Exclude<PaymentMethod, 'demo'>;
+const ALL_METHODS: ActivePaymentMethod[] = [
   'stripe',
   'waffo',
   'lightning',
@@ -41,9 +45,7 @@ const ALL_METHODS: PaymentMethod[] = [
   'wechatpay',
   'usdc',
 ];
-// The buttons always presented at checkout. Each real rail works if configured,
-// else its button leads to setup instructions; demo always works.
-const OFFERED: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'alipay', 'wechatpay', 'usdc', 'demo'];
+const OFFERED: ActivePaymentMethod[] = ['stripe', 'waffo', 'lightning', 'alipay', 'wechatpay', 'usdc'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
   return (
@@ -58,11 +60,7 @@ export function isPaymentMethod(value: string): value is PaymentMethod {
   );
 }
 
-/**
- * Whether a method can actually process a payment right now. Real rails need their
- * keys (and Lightning its node URL) — configured through the existing runtime
- * settings overlay or Waffo's deployment vars. Demo always works.
- */
+/** Whether a configured payment method can process a payment right now. */
 export function isMethodAvailable(
   method: PaymentMethod,
   settings: StoreSettings,
@@ -87,69 +85,55 @@ export function isMethodAvailable(
         ? !!settings.lnbitsUrl && has('lnbits_api_key')
         : !!settings.phoenixdUrl && has('phoenixd_password');
     case 'demo':
-      return true; // demo is always usable
+      return false;
   }
 }
 
-/** True when at least one REAL payment rail is configured (demo doesn't count). */
 export function hasRealMethod(settings: StoreSettings, vault = vaultReady()): boolean {
   return ALL_METHODS.some((m) => isMethodAvailable(m, settings, vault));
 }
 
-/** No real rail configured: only the demo method can take a payment. */
-export function paymentsInDemoMode(settings: StoreSettings, vault = vaultReady()): boolean {
-  return !hasRealMethod(settings, vault);
+/** Deprecated layout hook: demo mode no longer exists. */
+export function paymentsInDemoMode(_settings: StoreSettings): boolean {
+  return false;
 }
 
-/** The store's default rail (Settings → Payments; default 'stripe'). */
-export function defaultMethod(settings: StoreSettings): PaymentMethod {
+/** The store's default rail. Legacy `demo` settings are normalized by settings/db. */
+export function defaultMethod(settings: StoreSettings): ActivePaymentMethod {
   return settings.paymentProvider;
 }
 
-/**
- * Methods a buyer/agent can actually pay with right now — the configured real
- * rails plus demo, minus any the admin has disabled at runtime. Used by the agent
- * checkout + discovery, so callers are never handed a method that isn't wired up
- * (or has been switched off). May be EMPTY (admin disabled everything).
- */
+/** Configured, enabled real methods a buyer or agent can actually use. */
 export function enabledMethods(
   settings: StoreSettings,
   vault = vaultReady(),
-): PaymentMethod[] {
+): ActivePaymentMethod[] {
   const off = new Set(settings.disabledPaymentMethods);
   const def = defaultMethod(settings);
-  const orderedReal =
-    def === 'demo' ? ALL_METHODS : [def, ...ALL_METHODS.filter((m) => m !== def)];
-  const real = orderedReal
-    .filter((m): m is Exclude<PaymentMethod, 'demo'> => m !== 'demo')
+  return [def, ...ALL_METHODS.filter((m) => m !== def)]
     .filter((m) => isMethodAvailable(m, settings, vault))
     .filter((m) => !off.has(m));
-  if (off.has('demo')) return real;
-  return def === 'demo' ? ['demo', ...real] : [...real, 'demo'];
 }
 
-/**
- * Methods the checkout UI shows as buttons — Card, Waffo, Lightning, direct wallets, Demo (plus
- * any other configured rail), minus any the admin disabled. Unlike enabledMethods,
- * this keeps real rails visible when unconfigured so the UI can render setup links.
- */
+/** Methods shown by checkout/setup UIs, minus methods disabled by the merchant. */
 export function offeredMethods(
   settings: StoreSettings,
   vault = vaultReady(),
-): PaymentMethod[] {
+): ActivePaymentMethod[] {
   const off = new Set(settings.disabledPaymentMethods);
   const extra = ALL_METHODS.filter(
     (m) => !OFFERED.includes(m) && isMethodAvailable(m, settings, vault),
   );
-  return ([...OFFERED, ...extra] as PaymentMethod[]).filter((m) => !off.has(m));
+  return ([...OFFERED, ...extra] as ActivePaymentMethod[]).filter((m) => !off.has(m));
 }
 
 /** Build a concrete payment provider. */
 export async function getPaymentProvider(method?: PaymentMethod): Promise<PaymentProvider> {
   const settings = await getStoreSettings(env.DB);
-  const m = method ?? settings.paymentProvider;
-  if (m === 'demo') return createDemoProvider(env.DB);
+  const m = method ?? defaultMethod(settings);
   switch (m) {
+    case 'demo':
+      throw new Error('Demo checkout has been removed.');
     case 'waffo':
       if (!isWaffoConfigured()) throw new Error('Waffo is not fully configured.');
       return createWaffoProvider();

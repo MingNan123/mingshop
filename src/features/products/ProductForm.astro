@@ -30,9 +30,9 @@ const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:bo
       </section>
 
       <section id="pricing" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
-        <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">价格使用商城默认货币，库存为当前可销售数量。</p></div>
+        <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">这里设置商品的固定基础价格。Stripe、Waffo、Lightning、支付宝、微信支付、USDC 等所有支付方式都会从后台重新读取此价格；规格、附加项和运费在此基础上计算，买家不能在结账时修改金额。</p></div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div><label class="block text-sm font-medium" for="price">价格（{defaultCurrency.toUpperCase()}）</label><input id="price" name="price" type="number" step={priceStep} min="0" required value={price} class={inputClass} /></div>
+          <div><label class="block text-sm font-medium" for="price">固定价格（{defaultCurrency.toUpperCase()}）</label><input id="price" name="price" type="number" step={priceStep} min="0" required value={price} class={inputClass} /><p class="mt-1 text-xs text-gray-500">保存后作为所有支付渠道的统一基础金额。</p></div>
           <div><label class="block text-sm font-medium" for="stock">库存</label><input id="stock" name="stock" type="number" step="1" min="0" value={product?.stock ?? 0} class={inputClass} /></div>
         </div>
       </section>

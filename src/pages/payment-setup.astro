@@ -2,9 +2,6 @@
 export const prerender = false;
 import Layout from '../layouts/Layout.astro';
 
-// Reached from the cart when a buyer taps a payment method that isn't configured
-// yet. It's owner-facing setup help — how to turn that rail on — so the store can
-// graduate from Demo to real payments without leaving a dead button.
 const method = (Astro.url.searchParams.get('method') ?? '').toLowerCase();
 const origin = Astro.url.origin;
 
@@ -20,8 +17,8 @@ const GUIDES: Record<string, Guide> = {
     steps: [
       'Create a Stripe account and grab your Secret key from dashboard.stripe.com/apikeys.',
       'Paste it in Admin → Settings → Payment keys (Stripe secret key). It’s stored encrypted in your database.',
-      `Add a webhook endpoint in Stripe pointing at ${origin}/api/webhook/stripe (events: checkout.session.completed, checkout.session.async_payment_succeeded, and charge.refunded — the last one syncs refunds you make in the Stripe Dashboard back to your orders).`,
-      'Paste the signing secret it gives you into Payment keys (Stripe webhook signing secret). The card button goes live automatically.',
+      `Add a webhook endpoint in Stripe pointing at ${origin}/api/webhook/stripe (events: checkout.session.completed, checkout.session.async_payment_succeeded, and charge.refunded).`,
+      'Paste the signing secret into Payment keys. Product prices are read from the shop database when checkout starts.',
     ],
   },
   lightning: {
@@ -29,8 +26,8 @@ const GUIDES: Record<string, Guide> = {
     intro: 'Take instant Bitcoin Lightning payments from any wallet.',
     steps: [
       'Stand up an LNbits instance (or a phoenixd node).',
-      'In Admin → Settings → Payments, set the default rail to Lightning and pick the node (LNbits or phoenixd).',
-      'Enter the node URL in Payment config, and the key (LNbits invoice/read key, or phoenixd password) in Payment keys. The Lightning button goes live automatically.',
+      'In Admin → Settings → Payments, pick the node (LNbits or phoenixd).',
+      'Enter the node URL and key. Lightning invoices are minted from the same fixed product/order amount used by the other payment methods.',
     ],
   },
   opennode: {
@@ -39,34 +36,34 @@ const GUIDES: Record<string, Guide> = {
     steps: [
       'Create an OpenNode account and an API key.',
       'Paste it in Admin → Settings → Payment keys (OpenNode API key).',
-      `Point its webhook at ${origin}/api/webhook/opennode, and set the default rail to OpenNode in Settings → Payments.`,
+      `Point its webhook at ${origin}/api/webhook/opennode. The checkout amount is generated from the product prices stored by the shop.`,
     ],
   },
   alipay: {
     title: 'Set up Alipay direct payments',
-    intro: 'Accept Alipay immediately by sending buyers to your own collection link or QR payload.',
+    intro: 'Accept Alipay using your own collection link while the shop locks the order amount to product pricing.',
     steps: [
       'Create or copy an Alipay merchant/personal collection link.',
       'Paste it in Admin → Settings → Payments → Alipay payment URL.',
-      'Enable the Alipay direct method and optionally make it the default rail.',
+      'Set each product’s fixed price in Admin → Products. The Alipay payment page will display that server-calculated amount (plus selected options/shipping) and buyers cannot edit it in checkout.',
     ],
   },
   wechatpay: {
     title: 'Set up WeChat Pay direct payments',
-    intro: 'Accept WeChat Pay immediately with a direct collection link.',
+    intro: 'Accept WeChat Pay with your own collection link while the shop locks the order amount to product pricing.',
     steps: [
       'Create or copy a WeChat Pay collection link.',
       'Paste it in Admin → Settings → Payments → WeChat Pay payment URL.',
-      'Enable the WeChat Pay direct method and optionally make it the default rail.',
+      'Set each product’s fixed price in Admin → Products. The WeChat Pay page will display the server-calculated amount (plus selected options/shipping) and buyers cannot edit it in checkout.',
     ],
   },
   usdc: {
     title: 'Set up USDC direct payments',
-    intro: 'Accept USDC transfers to your own wallet without a hosted checkout provider.',
+    intro: 'Accept USDC transfers to your own wallet using the same shop-calculated order amount.',
     steps: [
       'Choose a network your customers can use, such as Polygon, Base, Ethereum, or Solana.',
       'Paste the USDC receiving address and network in Admin → Settings → Payments.',
-      'Enable the USDC direct method and reconcile submitted transaction hashes in your wallet.',
+      'Set product prices in Admin → Products. The payment request displays the server-calculated fixed order amount and asks the buyer for the transaction hash/reference.',
     ],
   },
 };
@@ -75,40 +72,29 @@ const guide = GUIDES[method] ?? null;
 
 <Layout title="Set up payments" description="How to enable a payment method.">
   <div class="mx-auto max-w-xl py-8">
-    <a href="/cart" class="text-xs uppercase tracking-widest text-faint hover:text-brand">
-      &larr; Back to cart
-    </a>
+    <a href="/cart" class="text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Back to cart</a>
+    {guide ? (
+      <>
+        <h1 class="mt-4 font-serif text-3xl tracking-tight">{guide.title}</h1>
+        <p class="mt-3 text-muted">{guide.intro}</p>
+        <ol class="mt-6 space-y-3">
+          {guide.steps.map((s, i) => (
+            <li class="flex gap-3 text-sm">
+              <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-medium text-brand">{i + 1}</span>
+              <span class="pt-0.5 text-muted">{s}</span>
+            </li>
+          ))}
+        </ol>
+      </>
+    ) : (
+      <>
+        <h1 class="mt-4 font-serif text-3xl tracking-tight">Set up payments</h1>
+        <p class="mt-3 text-muted">This payment method isn't configured. Configure a real payment method in Admin → Settings → Payments before accepting orders.</p>
+      </>
+    )}
 
-    {
-      guide ? (
-        <>
-          <h1 class="mt-4 font-serif text-3xl tracking-tight">{guide.title}</h1>
-          <p class="mt-3 text-muted">{guide.intro}</p>
-          <ol class="mt-6 space-y-3">
-            {guide.steps.map((s, i) => (
-              <li class="flex gap-3 text-sm">
-                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-medium text-brand">
-                  {i + 1}
-                </span>
-                <span class="pt-0.5 text-muted">{s}</span>
-              </li>
-            ))}
-          </ol>
-        </>
-      ) : (
-        <>
-          <h1 class="mt-4 font-serif text-3xl tracking-tight">Set up payments</h1>
-          <p class="mt-3 text-muted">
-            This payment method isn't configured yet. Add a real rail (card or Lightning)
-            in Admin → Settings → Payments, or keep using the Demo checkout to try the store.
-          </p>
-        </>
-      )
-    }
-
-    <div class="mt-8 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-      In the meantime, <strong class="font-semibold">Demo checkout</strong> works right now — it
-      places a real, demo-tagged order so you can see the full flow without charging anyone.
+    <div class="mt-8 rounded-md border border-line bg-surface px-4 py-3 text-sm text-muted">
+      All payment methods use product prices resolved by the server at checkout. No demo checkout or simulated order path is offered.
     </div>
   </div>
 </Layout>

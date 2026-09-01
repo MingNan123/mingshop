@@ -12,50 +12,17 @@ import { deliverOrderNotifications } from '../../email/outbox';
 import type { StoreSettings } from '../../settings/db';
 import { purgeStockProductCache } from '../../cache/purge';
 
-// Settlement logic for the self-rendered /pay page, one function per method. Kept
-// here (beside the views) so the route stays a thin dispatcher.
-
-export interface DemoSettleResult {
-  /** True once the order is recorded; the CALLER builds the redirect URL from
-   *  its guest param — this module never emits a bare public-id URL. */
+export interface PaymentSettleResult {
   settled?: boolean;
   declined?: string | null;
 }
 
-const DECLINE: Record<string, string> = {
-  insufficient: 'Payment declined — insufficient funds. (Simulated)',
-  decline: 'Payment declined — your card was declined. (Simulated)',
-};
-
 /**
- * Handle a demo-checkout POST. "approve" records a genuine order (tagged
- * payment_method='demo') through the same path the real webhooks use — emails,
- * stock, revenue, confirmation — and signals settled so the caller can redirect
- * to its guest order URL. Any other outcome returns a simulated decline message.
+ * Deprecated compatibility export for older tests/callers. Demo checkout has
+ * been removed, so this function can never turn a demo payment into an order.
  */
-export async function settleDemoCheckout(
-  pending: PendingPayment,
-  form: FormData,
-  origin: string,
-  settings?: StoreSettings,
-  waitUntil?: (promise: Promise<unknown>) => void,
-): Promise<DemoSettleResult> {
-  // Fail closed after the demo window even if a POST slips past the page guard.
-  if (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now()) {
-    return { declined: 'This demo checkout has expired.' };
-  }
-  const outcome = String(form.get('outcome') ?? 'approve');
-  const email = resolveRequiredOrderEmail(String(form.get('email') ?? ''), pending.email);
-  if (!email) return { declined: 'A valid email is required.' };
-  if (outcome === 'approve') {
-    const order = { ...pendingToPaidOrder(pending), email };
-    // pendingToPaidOrder carries settlePaymentHash, so the pending row settles
-    // inside the order batch — no separate markPendingSettled round trip. With
-    // waitUntil the emails (and their reads) run after the redirect is sent.
-    await recordPaidWebhookOrder({ type: 'demo.paid', order }, origin, 'demo', settings, waitUntil);
-    return { settled: true };
-  }
-  return { declined: DECLINE[outcome] ?? DECLINE.decline };
+export async function settleDemoCheckout(): Promise<PaymentSettleResult> {
+  return { declined: 'Demo checkout has been removed.' };
 }
 
 export async function settleManualWalletCheckout(
@@ -64,9 +31,12 @@ export async function settleManualWalletCheckout(
   origin: string,
   settings?: StoreSettings,
   waitUntil?: (promise: Promise<unknown>) => void,
-): Promise<DemoSettleResult> {
+): Promise<PaymentSettleResult> {
   if (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now()) {
     return { declined: 'This payment request has expired.' };
+  }
+  if (!['alipay', 'wechatpay', 'usdc'].includes(pending.backend)) {
+    return { declined: 'This payment method is not supported.' };
   }
   const email = resolveRequiredOrderEmail(String(form.get('email') ?? ''), pending.email);
   if (!email) return { declined: 'A valid email is required.' };
@@ -87,11 +57,7 @@ export async function settleManualWalletCheckout(
   return { settled: true };
 }
 
-/**
- * Settle-on-load for Lightning: poll the node directly (authoritative, so the page
- * works even with no public webhook). Records + marks settled when paid. Returns
- * true once settled so the caller can redirect to the order page.
- */
+/** Settle-on-load for Lightning by polling the configured node. */
 export async function settleLightningOnLoad(
   pending: PendingPayment,
   origin: string,
@@ -115,14 +81,8 @@ export async function settleLightningOnLoad(
       throw new Error(`Inventory reservation ${pending.public_id} is no longer active.`);
     }
     settledOrderId = existing.id;
-    // Won the settlement → the batch already marked the pending row. Lost it
-    // (webhook got there first) → that winner's batch marked it; settle again
-    // explicitly only in that race, as belt and braces for the redirect check.
     await markPendingSettled(env.DB, pending.payment_hash);
   }
-  // This path exists precisely for installations with NO public webhook, so if
-  // it doesn't dispatch the outbox rows nothing else reliably will (the sweep
-  // needs a later sale). Backgrounded when the page has an execution context.
   const deliver = () => deliverOrderNotifications(env.DB, settledOrderId!, origin, settings);
   if (waitUntil) waitUntil(deliver().catch((err) => console.error('Notification delivery failed:', err)));
   else await deliver();
