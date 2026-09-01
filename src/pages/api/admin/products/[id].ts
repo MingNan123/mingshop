@@ -125,8 +125,11 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   }
 
   await updateProduct(env.DB, id, { ...parsed.data, image_key, slug });
-  if (attachmentActive() && deliverable instanceof File && deliverable.size > 0) await setProductFile(env.DB, id, await uploadDigitalFile(getFileStorage(), deliverable));
-  else if (attachmentActive() && form.get('remove_deliverable') != null) await setProductFile(env.DB, id, null);
+  if (attachmentActive() && deliverable instanceof File && deliverable.size > 0) {
+    await setProductFile(env.DB, id, await uploadDigitalFile(getFileStorage(), deliverable));
+  } else if (attachmentActive() && form.get('remove_deliverable') != null) {
+    await setProductFile(env.DB, id, null);
+  }
   if (uploadedMediaId !== null) await syncPrimaryImage(env.DB, id);
 
   const categoryPublicIds = form.getAll('category').map((v) => parsePublicId(v, 'category')).filter((v): v is string => v !== null);

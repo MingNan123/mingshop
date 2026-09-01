@@ -12,9 +12,6 @@ import { catalogPath } from '../features/settings/home';
 
 if (!(Astro.locals.settings?.cartEnabled ?? true)) return Astro.redirect('/', 302);
 
-// Only configured, enabled real payment methods are shown. Prices are resolved
-// again from D1 on checkout, so every rail charges the fixed product/variant/extra
-// amount configured by the merchant rather than trusting browser-submitted totals.
 const settings = Astro.locals.settings;
 const methods = settings ? enabledMethods(settings) : [];
 const ready = (m: string) => !!settings && isMethodAvailable(m as never, settings);
@@ -27,17 +24,20 @@ const METHOD: Record<string, { label: string; hint: string; setupHint: string }>
   opennode: { label: 'Pay with Bitcoin', hint: 'On-chain or Lightning (OpenNode)', setupHint: 'Set up OpenNode' },
   alipay: { label: 'Pay with Alipay', hint: 'Fixed order amount from product pricing', setupHint: 'Add Alipay link' },
   wechatpay: { label: 'Pay with WeChat Pay', hint: 'Fixed order amount from product pricing', setupHint: 'Add WeChat Pay link' },
-  usdc: { label: 'Pay with USDC', hint: 'Fixed order amount from product pricing', setupHint: 'Add USDC address' },
+  usdc: { label: 'Pay with USDC', hint: 'Fixed amount · automatically confirmed on-chain', setupHint: 'Configure USDC auto verification' },
+  usdt: { label: 'Pay with USDT', hint: 'Fixed amount · automatically confirmed on-chain', setupHint: 'Configure USDT auto verification' },
 };
 
 const cart = readCart(Astro.cookies);
 const { lines, subtotalCents } = await resolveCart(env.DB, cart);
 const error = Astro.url.searchParams.get('error');
 const effectiveShipping = shippingFor(settings).config;
+const shippingRequired = shipmentWeightFor(lines).shippingRequired;
+const stablecoinNeedsAddress = effectiveShipping.enabled && shippingRequired;
 const destination = stripeDestination(
   settings,
   effectiveShipping,
-  shipmentWeightFor(lines).shippingRequired,
+  shippingRequired,
   Astro.request.headers.get('cf-ipcountry'),
 );
 const shopHref = catalogPath(Astro.locals.settings?.homePage);
@@ -89,7 +89,7 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
               {destination.showSelect && <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">Ship to<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}
               {destination.hiddenOnly && <input type="hidden" name="country" value={destination.countries[0]} />}
               {methodRows.map(({ m, ready, primary }) => ready ? (
-                <button type="submit" name="method" value={m} class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${primary ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}>
+                <button type="submit" name="method" value={m} formaction={m === 'usdt' && stablecoinNeedsAddress ? '/checkout' : undefined} formmethod={m === 'usdt' && stablecoinNeedsAddress ? 'GET' : undefined} class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${primary ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}>
                   <span><span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span><span class={`block text-xs ${primary ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={primary ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span>
                 </button>
               ) : (

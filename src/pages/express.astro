@@ -58,7 +58,9 @@ const totalCents = lines.reduce((s, l) => s + l.unitPriceCents * l.qty, 0);
 const methods = Astro.locals.settings ? enabledMethods(Astro.locals.settings) : [];
 if (methods.length === 0) return Astro.redirect(backHref, 303);
 const effectiveShipping = shippingFor(Astro.locals.settings).config;
-const destination = stripeDestination(Astro.locals.settings, effectiveShipping, shipmentWeightFor(weightLines).shippingRequired, Astro.request.headers.get('cf-ipcountry'));
+const shippingRequired = shipmentWeightFor(weightLines).shippingRequired;
+const usdtNeedsAddress = effectiveShipping.enabled && shippingRequired;
+const destination = stripeDestination(Astro.locals.settings, effectiveShipping, shippingRequired, Astro.request.headers.get('cf-ipcountry'));
 const heading = isBuyNow ? 'Buy now' : 'Checkout';
 const METHOD: Record<string, { label: string; hint: string }> = {
   stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more' },
@@ -67,7 +69,8 @@ const METHOD: Record<string, { label: string; hint: string }> = {
   opennode: { label: 'Pay with Bitcoin', hint: 'On-chain or Lightning (OpenNode)' },
   alipay: { label: 'Pay with Alipay', hint: 'Fixed amount from product pricing' },
   wechatpay: { label: 'Pay with WeChat Pay', hint: 'Fixed amount from product pricing' },
-  usdc: { label: 'Pay with USDC', hint: 'Fixed amount from product pricing' },
+  usdc: { label: 'Pay with USDC', hint: 'Fixed amount · automatically confirmed on-chain' },
+  usdt: { label: 'Pay with USDT', hint: 'Fixed amount · automatically confirmed on-chain' },
 };
 ---
 
@@ -78,7 +81,10 @@ const METHOD: Record<string, { label: string; hint: string }> = {
     <ul class="divide-y divide-line border-y border-line">{lines.map((l) => <li class="flex items-center gap-4 py-4"><ProductImage imageKey={l.imageKey} alt="" usage="thumbnail" fade class="h-16 w-16 shrink-0 rounded object-cover" /><div class="min-w-0 flex-1"><p class="truncate text-sm font-medium">{l.name}</p><p class="text-xs text-muted">Qty {l.qty}</p></div><span class="tabular-nums">{formatPrice(l.unitPriceCents * l.qty)}</span></li>)}</ul>
     <div class="mt-4 flex items-center justify-between"><span class="text-xs uppercase tracking-widest text-muted">Fixed total</span><span class="text-lg tabular-nums">{formatPrice(totalCents)}</span></div>
     <p class="mt-2 text-xs text-muted">All payment methods use the current product prices saved by the shop. The amount cannot be edited at checkout.</p>
-    <div class="mt-6 space-y-2">{methods.map((m, i) => <form method="POST" action="/api/checkout">{carry.map((c) => <input type="hidden" name={c.name} value={c.value} />)}<input type="hidden" name="method" value={m} />{m === 'stripe' && destination.showSelect && <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">Ship to<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}{m === 'stripe' && destination.hiddenOnly && <input type="hidden" name="country" value={destination.countries[0]} />}<button type="submit" class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${i === 0 ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}><span><span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span><span class={`block text-xs ${i === 0 ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={i === 0 ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span></button></form>)}</div>
+    <div class="mt-6 space-y-2">{methods.map((m, i) => {
+      const usdtAddressStep = m === 'usdt' && usdtNeedsAddress;
+      return <form method={usdtAddressStep ? 'GET' : 'POST'} action={usdtAddressStep ? '/checkout' : '/api/checkout'}>{carry.map((c) => <input type="hidden" name={c.name} value={c.value} />)}<input type="hidden" name="method" value={m} />{m === 'stripe' && destination.showSelect && <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">Ship to<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}{m === 'stripe' && destination.hiddenOnly && <input type="hidden" name="country" value={destination.countries[0]} />}<button type="submit" class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${i === 0 ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}><span><span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span><span class={`block text-xs ${i === 0 ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={i === 0 ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span></button></form>;
+    })}</div>
     <a href={backHref} class="mt-6 inline-block text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Back</a>
   </div>
 </Layout>

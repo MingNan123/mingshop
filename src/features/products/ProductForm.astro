@@ -30,7 +30,7 @@ const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:bo
       </section>
 
       <section id="pricing" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
-        <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">这里设置商品的固定基础价格。Stripe、Waffo、Lightning、支付宝、微信支付、USDC 等所有支付方式都会从后台重新读取此价格；规格、附加项和运费在此基础上计算，买家不能在结账时修改金额。</p></div>
+        <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">这里设置商品的固定基础价格。Stripe、Waffo、Lightning、支付宝、微信支付、USDC、USDT 等所有支付方式都会从后台重新读取此价格；规格、附加项和运费在此基础上计算，买家不能在结账时修改金额。</p></div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div><label class="block text-sm font-medium" for="price">固定价格（{defaultCurrency.toUpperCase()}）</label><input id="price" name="price" type="number" step={priceStep} min="0" required value={price} class={inputClass} /><p class="mt-1 text-xs text-gray-500">保存后作为所有支付渠道的统一基础金额。</p></div>
           <div><label class="block text-sm font-medium" for="stock">库存</label><input id="stock" name="stock" type="number" step="1" min="0" value={product?.stock ?? 0} class={inputClass} /></div>
@@ -43,13 +43,14 @@ const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:bo
         <div class="mt-4"><label class="block text-sm font-medium" for="weight">重量（{weightUnit}）</label><input id="weight" name="weight" type="text" inputmode="decimal" value={product?.weight_grams != null ? formatWeightValue(product.weight_grams, weightUnit) : ''} class={inputClass} /><p class="mt-1 text-xs text-gray-500">{weightRequired ? '当前配送区域按重量计费，重量为必填项。' : '当前可选填重量。'}</p></div>
       </section>}
 
-      <section id="digital" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
+      {attachmentActive() && <fieldset id="digital" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
+        <legend class="sr-only">数字商品</legend>
         <div class="mb-4"><h2 class="font-medium">数字商品</h2><p class="mt-1 text-xs text-gray-500">付款成功后可向客户提供私密下载。</p></div>
         {product?.file_key && <p class="mb-3 text-sm text-gray-600">已附加：<strong>{product.file_name ?? 'download'}</strong>{product.file_size_bytes != null && `（${Math.ceil(product.file_size_bytes / 1024)} KB）`}</p>}
         <label class="block text-sm font-medium" for="deliverable">{product?.file_key ? '替换文件' : '添加文件'}</label><input id="deliverable" name="deliverable" type="file" class="mt-2 block w-full text-sm text-gray-600" />
         <p class="mt-1 text-xs text-gray-500">支持常见数字文件格式，最大 100 MB。</p>
         {product?.file_key && <label class="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" name="remove_deliverable" class="h-4 w-4" />删除数字附件</label>}
-      </section>
+      </fieldset>}
 
       {showImage && <section class="rounded-lg border border-line bg-white p-5"><h2 class="mb-4 font-medium">商品图片</h2><input id="image" name="image" type="file" accept="image/*" class="block w-full text-sm text-gray-600" /></section>}
 
@@ -58,7 +59,7 @@ const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:bo
 
     <aside class="h-fit space-y-4 lg:sticky lg:top-6">
       <section class="rounded-lg border border-line bg-white p-5"><h2 class="font-medium">发布</h2><label class="mt-4 flex items-center gap-2 text-sm"><input name="active" type="checkbox" checked={product ? product.active === 1 : true} class="h-4 w-4" />立即上架到商城</label><p class="mt-2 text-xs text-gray-500">关闭后商品不会在商城公开显示。</p><input type="hidden" name="currency" value={defaultCurrency} /><div class="mt-5 grid gap-2"><button type="submit" class="rounded-md bg-brand px-5 py-2.5 font-medium text-on-brand hover:bg-brand-hover">{submitLabel}</button><a href="/admin/products" class="rounded-md border border-line px-5 py-2.5 text-center hover:bg-surface">取消</a></div></section>
-      {product && <nav class="rounded-lg border border-line bg-white p-4"><p class="mb-2 text-xs font-medium uppercase tracking-widest text-gray-400">快速定位</p><div class="grid gap-1 text-sm"><a href="#basic" class="hover:text-brand">基本信息</a><a href="#pricing" class="hover:text-brand">价格与库存</a>{attachmentActive() && <a href="#shipping" class="hover:text-brand">配送设置</a>}<a href="#digital" class="hover:text-brand">数字商品</a><a href="#categories" class="hover:text-brand">商品分类</a><a href="#gallery" class="hover:text-brand">商品图片库</a><a href="#options" class="hover:text-brand">规格与附加选项</a></div></nav>}
+      {product && <nav class="rounded-lg border border-line bg-white p-4"><p class="mb-2 text-xs font-medium uppercase tracking-widest text-gray-400">快速定位</p><div class="grid gap-1 text-sm"><a href="#basic" class="hover:text-brand">基本信息</a><a href="#pricing" class="hover:text-brand">价格与库存</a>{attachmentActive() && <a href="#shipping" class="hover:text-brand">配送设置</a>}{attachmentActive() && <a href="#digital" class="hover:text-brand">数字商品</a>}<a href="#categories" class="hover:text-brand">商品分类</a><a href="#gallery" class="hover:text-brand">商品图片库</a><a href="#options" class="hover:text-brand">规格与附加选项</a></div></nav>}
     </aside>
   </div>
 </form>

@@ -1,33 +1,28 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import type { PaidOrderInput, OrderItemInput, ShippingAddress } from '../../orders/db';
+import { stablecoinSnapshot, type StablecoinNetworkProfile, type StablecoinToken } from '../stablecoin-networks.ts';
 
-/**
- * Pending Lightning payments — the in-flight state between minting a BOLT11
- * invoice and the customer paying it. NOT an order until settled (see
- * migrations/0014). Used only by the self-rendered backends (phoenixd / LNbits);
- * OpenNode also uses it because its webhook cannot echo application state.
- */
 export interface PendingPayment {
   id: number;
   public_id: string;
   payment_hash: string;
   backend: string;
-  bolt11: string | null; // null for hosted (opennode) — no invoice to render
+  bolt11: string | null;
   amount_sat: number | null;
   amount_total_cents: number;
   currency: string;
   email: string | null;
-  items: string | null; // JSON: [{ id, q, n, p }]
+  items: string | null;
   shipping_cents: number;
-  /** Which service was chosen, and what the shipment weighed when it was priced.
-   *  Under weight bands the amount alone no longer explains itself. */
   shipping_label: string | null;
   shipping_weight_grams: number | null;
-  delivery_method: string | null; // 'pickup' | 'shipping' | NULL (legacy/none)
-  ship_address: string | null; // JSON (ShippingAddress) or null
-  /** Explicit link for post-0021 rows; null preserves legacy settlement. */
+  delivery_method: string | null;
+  ship_address: string | null;
   reservation_id: string | null;
-  status: string; // 'pending' | 'settled' | 'expired'
+  stablecoin_network_id: string | null;
+  stablecoin_network_snapshot: string | null;
+  stablecoin_network_selected_at: string | null;
+  status: string;
   expires_at: string | null;
   created_at: string;
 }
@@ -41,16 +36,15 @@ export interface NewPendingPayment {
   amountTotalCents: number;
   currency: string;
   email: string | null;
-  /** Pre-serialized JSON cart snapshot persisted server-side. */
   itemsJson: string | null;
   shippingCents?: number;
   shippingLabel?: string | null;
   shippingWeightGrams?: number | null;
   deliveryMethod?: 'pickup' | 'shipping' | null;
-  /** Pre-serialized JSON ShippingAddress, or null. */
   shipAddressJson?: string | null;
-  /** Inventory hold created with this payment; absent for legacy rows. */
   reservationId?: string | null;
+  stablecoinNetworkId?: string | null;
+  stablecoinNetworkSnapshot?: string | null;
   expiresAt: string | null;
 }
 
@@ -58,8 +52,8 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
   await db
     .prepare(
       `INSERT INTO pending_payments
-         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (public_id, payment_hash, backend, bolt11, amount_sat, amount_total_cents, currency, email, items, shipping_cents, shipping_label, shipping_weight_grams, delivery_method, ship_address, expires_at, reservation_id, stablecoin_network_id, stablecoin_network_snapshot)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       p.publicId,
@@ -78,6 +72,8 @@ export async function createPendingPayment(db: D1Database, p: NewPendingPayment)
       p.shipAddressJson ?? null,
       p.expiresAt,
       p.reservationId ?? null,
+      p.stablecoinNetworkId ?? null,
+      p.stablecoinNetworkSnapshot ?? null,
     )
     .run();
 }
@@ -86,47 +82,68 @@ export async function getPendingByPublicId(
   db: D1Database,
   publicId: string,
 ): Promise<PendingPayment | null> {
-  return db
-    .prepare('SELECT * FROM pending_payments WHERE public_id = ?')
-    .bind(publicId)
-    .first<PendingPayment>();
+  return db.prepare('SELECT * FROM pending_payments WHERE public_id = ?').bind(publicId).first<PendingPayment>();
 }
 
 export async function getPendingByHash(
   db: D1Database,
   paymentHash: string,
 ): Promise<PendingPayment | null> {
-  return db
-    .prepare('SELECT * FROM pending_payments WHERE payment_hash = ?')
-    .bind(paymentHash)
-    .first<PendingPayment>();
+  return db.prepare('SELECT * FROM pending_payments WHERE payment_hash = ?').bind(paymentHash).first<PendingPayment>();
 }
 
-/** Flip a pending row to 'settled' (idempotent — recordPaidOrder is the real guard). */
-export async function markPendingSettled(db: D1Database, paymentHash: string): Promise<void> {
-  await db
-    .prepare(`UPDATE pending_payments SET status = 'settled' WHERE payment_hash = ?`)
-    .bind(paymentHash)
-    .run();
+export async function updatePendingEmail(
+  db: D1Database,
+  publicId: string,
+  email: string,
+): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  if (!/.+@.+\..+/.test(normalized) || normalized.length > 254) return false;
+  const result = await db.prepare(
+    `UPDATE pending_payments SET email = ?
+     WHERE public_id = ? AND status = 'pending'`,
+  ).bind(normalized, publicId).run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 /**
- * Build a PaidOrderInput from a settled pending row (pure). The cart snapshot was
- * stored as the compact checkout snapshot shape: [{ id, q, n, p }].
- * Lives here (not in a provider) so it stays free of `cloudflare:workers` imports
- * and is unit-testable. Shared by the Lightning and OpenNode providers.
+ * Freeze the merchant-approved network chosen by the buyer. The UPDATE itself is
+ * immutable: once a snapshot exists, neither UI nor a crafted POST can switch it.
  */
+export async function selectPendingStablecoinNetwork(
+  db: D1Database,
+  publicId: string,
+  token: StablecoinToken,
+  profile: StablecoinNetworkProfile,
+  email?: string | null,
+): Promise<boolean> {
+  if (!profile.enabled || profile.token !== token) return false;
+  let normalizedEmail: string | null = null;
+  if (email != null && email.trim() !== '') {
+    normalizedEmail = email.trim().toLowerCase();
+    if (!/.+@.+\..+/.test(normalizedEmail) || normalizedEmail.length > 254) return false;
+  }
+  const result = await db.prepare(
+    `UPDATE pending_payments
+        SET email = COALESCE(?, email),
+            stablecoin_network_id = ?,
+            stablecoin_network_snapshot = ?,
+            stablecoin_network_selected_at = datetime('now')
+      WHERE public_id = ? AND backend = ? AND status = 'pending'
+        AND stablecoin_network_snapshot IS NULL`,
+  ).bind(normalizedEmail, profile.id, stablecoinSnapshot(profile), publicId, token).run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+export async function markPendingSettled(db: D1Database, paymentHash: string): Promise<void> {
+  await db.prepare(`UPDATE pending_payments SET status = 'settled' WHERE payment_hash = ?`).bind(paymentHash).run();
+}
+
 export function pendingToPaidOrder(p: PendingPayment): PaidOrderInput {
   let items: OrderItemInput[] = [];
   if (p.items) {
     try {
-      const raw = JSON.parse(p.items) as {
-        id: number;
-        q: number;
-        n: string;
-        p: number;
-        v?: number | null;
-      }[];
+      const raw = JSON.parse(p.items) as { id: number; q: number; n: string; p: number; v?: number | null }[];
       items = raw.map((r) => ({
         productId: r.id,
         variantId: r.v ?? null,
@@ -140,11 +157,7 @@ export function pendingToPaidOrder(p: PendingPayment): PaidOrderInput {
   }
   let shippingAddress: ShippingAddress | null = null;
   if (p.ship_address) {
-    try {
-      shippingAddress = JSON.parse(p.ship_address) as ShippingAddress;
-    } catch {
-      shippingAddress = null;
-    }
+    try { shippingAddress = JSON.parse(p.ship_address) as ShippingAddress; } catch { shippingAddress = null; }
   }
   return {
     providerSessionId: p.payment_hash,
@@ -159,7 +172,6 @@ export function pendingToPaidOrder(p: PendingPayment): PaidOrderInput {
     shippingAddress,
     currency: p.currency,
     items,
-    // Settle this pending row inside the order batch — no separate round trip.
     settlePaymentHash: p.payment_hash,
   };
 }

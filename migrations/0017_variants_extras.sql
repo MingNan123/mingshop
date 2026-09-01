@@ -9,6 +9,7 @@
 
 CREATE TABLE IF NOT EXISTS product_variants (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id   TEXT,
   product_id  INTEGER NOT NULL REFERENCES products(id),
   label       TEXT    NOT NULL,            -- "Small", "Red"
   price_cents INTEGER NOT NULL,            -- the variant's full price (minor units)
@@ -21,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id, 
 
 CREATE TABLE IF NOT EXISTS product_extras (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id         TEXT,
   product_id        INTEGER NOT NULL REFERENCES products(id),
   label             TEXT    NOT NULL,      -- "Gift wrap"
   price_delta_cents INTEGER NOT NULL DEFAULT 0, -- +500 (can be 0)

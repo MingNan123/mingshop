@@ -1,14 +1,18 @@
--- 0033 compatibility companion: prefixed public IDs.
+-- 0040: freeze the buyer-selected stablecoin network on each pending payment.
+-- Merchant network settings may change while a payment is pending; these columns
+-- keep the receiving address, token contract and chain adapter immutable for that order.
 --
--- The repository also has 0033_label_url.sql. Clean D1 migration runs can treat
--- files with the same leading version as one migration version, so the actual
--- ALTER TABLE transition now lives in 0033_label_url.sql. Keep this companion
--- idempotent: if a Wrangler version applies both 0033 files, it must not attempt
--- to add the same columns twice.
---
--- Row IDs remain internal primary/foreign keys; `public_id` is the immutable
--- external identity. Creation code generates values and the backfill script fills
--- legacy NULL rows.
+-- This unique migration number also reinforces idempotent public-ID indexes and
+-- guest-access registry tables for clean installs affected by the historical
+-- duplicate 0033 migration-number collision. CREATE IF NOT EXISTS is safe on
+-- existing production databases.
+
+ALTER TABLE pending_payments ADD COLUMN stablecoin_network_id TEXT;
+ALTER TABLE pending_payments ADD COLUMN stablecoin_network_snapshot TEXT;
+ALTER TABLE pending_payments ADD COLUMN stablecoin_network_selected_at TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_pending_stablecoin_network
+  ON pending_payments(backend, status, stablecoin_network_id, created_at);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_public_id
   ON products(public_id) WHERE public_id IS NOT NULL;

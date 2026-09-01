@@ -2,32 +2,53 @@ import { describe, expect, it } from 'vitest';
 import { enabledMethods, offeredMethods, isMethodAvailable } from './index';
 import { parseStoreSettings } from '../settings/db';
 
-describe('direct wallet payment methods', () => {
-  it('offers direct wallet setup entries even before they are configured', () => {
-    const settings = parseStoreSettings([]);
+const usdcProfile = {
+  id: 'usdc-base', token: 'usdc', label: 'Base', kind: 'evm', enabled: true,
+  receiveAddress: '0x1111111111111111111111111111111111111111',
+  endpoint: 'https://base-rpc.example',
+  tokenAddress: '0x2222222222222222222222222222222222222222',
+  decimals: 6, confirmations: 12,
+};
+const usdtProfile = {
+  id: 'usdt-evm', token: 'usdt', label: 'USDT EVM', kind: 'evm', enabled: true,
+  receiveAddress: '0x3333333333333333333333333333333333333333',
+  endpoint: 'https://evm-rpc.example',
+  tokenAddress: '0x4444444444444444444444444444444444444444',
+  decimals: 6, confirmations: 12,
+};
 
-    expect(offeredMethods(settings)).toEqual([
-      'stripe',
-      'waffo',
-      'lightning',
-      'alipay',
-      'wechatpay',
-      'usdc',
-      'demo',
-    ]);
+describe('stablecoin-only payment methods', () => {
+  it('offers only USDT and USDC setup entries', () => {
+    const settings = parseStoreSettings([]);
+    expect(offeredMethods(settings)).toEqual(['usdt', 'usdc']);
   });
 
-  it('enables direct wallets after their admin settings are saved', () => {
+  it('does not accept legacy payment rails even when their old settings still exist', () => {
     const settings = parseStoreSettings([
       { key: 'alipay_payment_url', value: 'https://qr.alipay.com/example' },
       { key: 'wechatpay_payment_url', value: 'weixin://wxpay/example' },
-      { key: 'usdc_address', value: '0x1111111111111111111111111111111111111111' },
-      { key: 'usdc_network', value: 'Polygon' },
+      { key: 'enc:stripe_secret_key', value: 'ciphertext' },
+      { key: 'enc:stripe_webhook_secret', value: 'ciphertext' },
     ]);
+    expect(isMethodAvailable('alipay', settings)).toBe(false);
+    expect(isMethodAvailable('wechatpay', settings)).toBe(false);
+    expect(isMethodAvailable('stripe', settings)).toBe(false);
+  });
 
-    expect(isMethodAvailable('alipay', settings)).toBe(true);
-    expect(isMethodAvailable('wechatpay', settings)).toBe(true);
+  it('enables a coin when the merchant has an enabled validated network profile', () => {
+    const settings = parseStoreSettings([
+      { key: 'stablecoin_networks_json', value: JSON.stringify([usdcProfile, usdtProfile]) },
+    ]);
     expect(isMethodAvailable('usdc', settings)).toBe(true);
-    expect(enabledMethods(settings)).toEqual(['alipay', 'wechatpay', 'usdc', 'demo']);
+    expect(isMethodAvailable('usdt', settings)).toBe(true);
+    expect(enabledMethods(settings)).toEqual(['usdt', 'usdc']);
+  });
+
+  it('keeps a coin unavailable when its only profile is disabled', () => {
+    const settings = parseStoreSettings([
+      { key: 'stablecoin_networks_json', value: JSON.stringify([{ ...usdcProfile, enabled: false }]) },
+    ]);
+    expect(isMethodAvailable('usdc', settings)).toBe(false);
+    expect(enabledMethods(settings)).toEqual([]);
   });
 });

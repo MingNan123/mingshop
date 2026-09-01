@@ -4,13 +4,12 @@ import { getSetting, setSetting } from '../settings/db';
 import { decryptSecret, encryptSecret } from './crypto';
 
 /**
- * Provider-key vault. Every sensitive provider key (Stripe, OpenNode, Resend,
- * Turnstile, Lightning) is set in the admin dashboard and stored as an `enc:<name>`
- * settings row in D1, AES-256-GCM-encrypted under the SECRETS_KEK Worker secret
- * (see ./crypto). There is NO env-var path — a clone is reconfigured entirely from
- * the dashboard. A D1 leak alone yields only ciphertext (you need the KEK too). The
- * KEK is the one irreducible Worker secret; without it the vault is dormant and the
- * store runs demo-only. Keys are write-only from the UI: stored, never rendered back.
+ * Provider-key vault. Every sensitive provider key is set in the admin dashboard
+ * and stored as an `enc:<name>` settings row in D1, AES-256-GCM-encrypted under
+ * the SECRETS_KEK Worker secret (see ./crypto). There is NO env-var path — a
+ * clone is reconfigured entirely from the dashboard. A D1 leak alone yields only
+ * ciphertext (you need the KEK too). Keys are write-only from the UI: stored,
+ * never rendered back.
  */
 export type SecretName =
   | 'stripe_secret_key'
@@ -20,7 +19,8 @@ export type SecretName =
   | 'resend_api_key'
   | 'turnstile_secret_key'
   | 'lnbits_api_key'
-  | 'phoenixd_password';
+  | 'phoenixd_password'
+  | 'trongrid_api_key';
 
 export const SECRET_NAMES: readonly SecretName[] = [
   'stripe_secret_key',
@@ -31,6 +31,7 @@ export const SECRET_NAMES: readonly SecretName[] = [
   'turnstile_secret_key',
   'lnbits_api_key',
   'phoenixd_password',
+  'trongrid_api_key',
 ];
 
 /** D1 settings-row key holding the encrypted blob for a secret. */
@@ -48,23 +49,16 @@ export function vaultReady(): boolean {
   return kek() !== null;
 }
 
-/**
- * Resolve a secret's plaintext value from the encrypted D1 vault, or null when it's
- * unset / the vault is dormant / the KEK can't decrypt it. Used at
- * checkout/webhook/refund time — not per page render.
- */
+/** Resolve a secret's plaintext value from the encrypted D1 vault. */
 export async function getSecret(db: D1Database, name: SecretName): Promise<string | null> {
   const k = kek();
   if (!k) return null;
   const blob = await getSetting(db, encKey(name));
   if (!blob) return null;
-  return decryptSecret(k, blob); // null if the KEK was rotated / ciphertext tampered
+  return decryptSecret(k, blob);
 }
 
-/**
- * Store (or clear) a secret encrypted in D1. Requires the KEK — without it we refuse
- * rather than write plaintext. An empty value deletes the row.
- */
+/** Store (or clear) a secret encrypted in D1. */
 export async function setSecret(
   db: D1Database,
   name: SecretName,
