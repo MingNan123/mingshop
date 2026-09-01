@@ -25,6 +25,13 @@ import {
   setFeatureEnabled,
 } from '../../features/settings/db';
 import {
+  loadStablecoinProfiles,
+  saveStablecoinProfiles,
+  type StablecoinNetworkKind,
+  type StablecoinNetworkProfile,
+  type StablecoinToken,
+} from '../../features/payments/stablecoin-networks';
+import {
   getSecret,
   setSecret,
   vaultReady,
@@ -56,6 +63,98 @@ const capabilities: RuntimeCapabilities = {
   ai: !!env.AI,
   vectorize: !!env.VECTORIZE,
 };
+
+const STABLECOIN_FORM_ROWS = 8;
+const stablecoinDefaults: StablecoinNetworkProfile[] = [
+  {
+    id: 'usdc-polygon',
+    token: 'usdc',
+    label: 'Polygon',
+    kind: 'evm',
+    enabled: true,
+    receiveAddress: '',
+    endpoint: 'https://polygon-rpc.com',
+    tokenAddress: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdt-tron',
+    token: 'usdt',
+    label: 'TRON (TRC-20)',
+    kind: 'tron',
+    enabled: true,
+    receiveAddress: '',
+    endpoint: 'https://api.trongrid.io',
+    tokenAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    decimals: 6,
+    confirmations: 1,
+  },
+  {
+    id: 'usdt-polygon',
+    token: 'usdt',
+    label: 'Polygon',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://polygon-rpc.com',
+    tokenAddress: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdc-base',
+    token: 'usdc',
+    label: 'Base',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://mainnet.base.org',
+    tokenAddress: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+    decimals: 6,
+    confirmations: 12,
+  },
+];
+
+function stablecoinProfilesFromForm(form: FormData): StablecoinNetworkProfile[] {
+  const slug = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 36);
+  const used = new Set<string>();
+
+  return form
+    .getAll('stablecoin_row')
+    .map((row) => String(row))
+    .map((row, index) => {
+      const token: StablecoinToken =
+        String(form.get(`stablecoin_token:${row}`) ?? '').trim().toLowerCase() === 'usdc' ? 'usdc' : 'usdt';
+      const kind: StablecoinNetworkKind =
+        String(form.get(`stablecoin_kind:${row}`) ?? '').trim().toLowerCase() === 'tron' ? 'tron' : 'evm';
+      const label = String(form.get(`stablecoin_label:${row}`) ?? '').trim().slice(0, 80);
+      const receiveAddress = String(form.get(`stablecoin_receive:${row}`) ?? '').trim();
+      const endpoint = String(form.get(`stablecoin_endpoint:${row}`) ?? '').trim().replace(/\/+$/, '');
+      const tokenAddress = String(form.get(`stablecoin_token_address:${row}`) ?? '').trim();
+      if (!label || !receiveAddress || !endpoint || !tokenAddress) return null;
+      const baseId =
+        String(form.get(`stablecoin_id:${row}`) ?? '').trim().toLowerCase() ||
+        `${token}-${slug(label) || index + 1}`;
+      let id = baseId;
+      for (let suffix = 2; used.has(id); suffix += 1) id = `${baseId}-${suffix}`;
+      used.add(id);
+      return {
+        id,
+        token,
+        label,
+        kind,
+        enabled: String(form.get(`stablecoin_enabled:${row}`)) === '1',
+        receiveAddress,
+        endpoint,
+        tokenAddress,
+        decimals: Number(form.get(`stablecoin_decimals:${row}`) ?? 6),
+        confirmations: Number(form.get(`stablecoin_confirmations:${row}`) ?? (kind === 'tron' ? 1 : 12)),
+      };
+    })
+    .filter((profile): profile is StablecoinNetworkProfile => profile !== null);
+}
 
 // Runtime mutations (POST). On success set a one-time flash cookie and redirect to a
 // CLEAN url (no ?msg lingering) — the GET below reads + clears it (Post/Redirect/Get).
@@ -301,10 +400,21 @@ if (Astro.request.method === 'POST') {
     await setSetting(env.DB, 'opennode_api_url', String(form.get('opennode_api_url') ?? '').trim() || null);
     await applySecrets(['opennode_api_key']);
   } else if (action === 'save_direct_wallets') {
+    const stablecoinProfiles = stablecoinProfilesFromForm(form);
+    const firstUsdc = stablecoinProfiles.find((profile) => profile.enabled && profile.token === 'usdc');
+    const firstUsdt = stablecoinProfiles.find((profile) => profile.enabled && profile.token === 'usdt');
     await setSetting(env.DB, 'alipay_payment_url', String(form.get('alipay_payment_url') ?? '').trim() || null);
     await setSetting(env.DB, 'wechatpay_payment_url', String(form.get('wechatpay_payment_url') ?? '').trim() || null);
-    await setSetting(env.DB, 'usdc_address', String(form.get('usdc_address') ?? '').trim() || null);
-    await setSetting(env.DB, 'usdc_network', String(form.get('usdc_network') ?? '').trim() || null);
+    try {
+      await saveStablecoinProfiles(env.DB, stablecoinProfiles);
+      await setSetting(env.DB, 'usdc_address', firstUsdc?.receiveAddress ?? null);
+      await setSetting(env.DB, 'usdc_network', firstUsdc?.label ?? null);
+      await setSetting(env.DB, 'usdt_address', firstUsdt?.receiveAddress ?? null);
+      await setSetting(env.DB, 'usdt_network', firstUsdt?.label ?? null);
+    } catch (error) {
+      validationError =
+        error instanceof Error ? error.message : 'Stablecoin network settings are invalid.';
+    }
   }
   // Admin saves are deliberately coarse and infrequent. Purge both public
   // dependency roots after the write rather than risk a newly added setting
@@ -340,6 +450,7 @@ if (flash) Astro.cookies.delete('flash', { path: '/admin/settings' });
 const msg = validationError || flash || Astro.url.searchParams.get('msg');
 
 const settings = await getStoreSettings(env.DB);
+const savedStablecoinProfiles = await loadStablecoinProfiles(env.DB);
 const disabledSet = new Set(settings.disabledPaymentMethods);
 // Store name is a runtime overlay (this field / the setup wizard) over STORE_NAME.
 const storeName = settings.storeName ?? cfg.storeName;
@@ -452,6 +563,7 @@ const paymentMethods: { m: PaymentMethod; label: string }[] = [
   { m: 'opennode', label: 'Bitcoin (OpenNode)' },
   { m: 'alipay', label: 'Alipay direct' },
   { m: 'wechatpay', label: 'WeChat Pay direct' },
+  { m: 'usdt', label: 'USDT direct' },
   { m: 'usdc', label: 'USDC direct' },
   { m: 'demo', label: 'Demo checkout' },
 ];
@@ -473,7 +585,29 @@ const payments = {
   usdcAddress: settings.usdcAddress ?? '',
   usdcNetwork: settings.usdcNetwork ?? 'Polygon',
 };
-
+const stablecoinRows = [
+  ...savedStablecoinProfiles,
+  ...stablecoinDefaults.filter(
+    (fallback) =>
+      !savedStablecoinProfiles.some(
+        (profile) => profile.token === fallback.token && profile.label.toLowerCase() === fallback.label.toLowerCase(),
+      ),
+  ),
+].slice(0, STABLECOIN_FORM_ROWS);
+while (stablecoinRows.length < STABLECOIN_FORM_ROWS) {
+  stablecoinRows.push({
+    id: '',
+    token: 'usdt',
+    label: '',
+    kind: 'evm',
+    enabled: true,
+    receiveAddress: '',
+    endpoint: '',
+    tokenAddress: '',
+    decimals: 6,
+    confirmations: 12,
+  });
+}
 // Encrypted key vault (features/secrets). Keys are write-only — stored AES-GCM in
 // D1 under SECRETS_KEK, never echoed back. Needs a KEK; without it the vault is
 // dormant (the store runs demo-only).
@@ -484,6 +618,7 @@ const pmMap = Object.fromEntries(pmRows.map((r) => [r.m, r])) as Record<
   string,
   (typeof pmRows)[number]
 >;
+const stablecoinInstalled = pmMap.usdc.installed || pmMap.usdt.installed;
 
 // Email integration — config lives in D1 (overlaid on the build-time defaults), the
 // Resend API key in the vault. `from` defaults to the build-time config when blank.
@@ -1111,8 +1246,21 @@ const sections = [
         <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
           <input type="hidden" name="_action" value="save_direct_wallets" />
           <input type="hidden" name="wechatpay_payment_url" value={payments.wechatpayPaymentUrl} />
-          <input type="hidden" name="usdc_address" value={payments.usdcAddress} />
-          <input type="hidden" name="usdc_network" value={payments.usdcNetwork} />
+          {savedStablecoinProfiles.map((profile, index) => (
+            <>
+              <input type="hidden" name="stablecoin_row" value={`alipay-${index}`} />
+              <input type="hidden" name={`stablecoin_id:alipay-${index}`} value={profile.id} />
+              <input type="hidden" name={`stablecoin_token:alipay-${index}`} value={profile.token} />
+              <input type="hidden" name={`stablecoin_label:alipay-${index}`} value={profile.label} />
+              <input type="hidden" name={`stablecoin_kind:alipay-${index}`} value={profile.kind} />
+              <input type="hidden" name={`stablecoin_receive:alipay-${index}`} value={profile.receiveAddress} />
+              <input type="hidden" name={`stablecoin_endpoint:alipay-${index}`} value={profile.endpoint} />
+              <input type="hidden" name={`stablecoin_token_address:alipay-${index}`} value={profile.tokenAddress} />
+              <input type="hidden" name={`stablecoin_decimals:alipay-${index}`} value={String(profile.decimals)} />
+              <input type="hidden" name={`stablecoin_confirmations:alipay-${index}`} value={String(profile.confirmations)} />
+              <input type="hidden" name={`stablecoin_enabled:alipay-${index}`} value={profile.enabled ? '1' : '0'} />
+            </>
+          ))}
           <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
             Alipay payment URL
             <input
@@ -1146,8 +1294,21 @@ const sections = [
         <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
           <input type="hidden" name="_action" value="save_direct_wallets" />
           <input type="hidden" name="alipay_payment_url" value={payments.alipayPaymentUrl} />
-          <input type="hidden" name="usdc_address" value={payments.usdcAddress} />
-          <input type="hidden" name="usdc_network" value={payments.usdcNetwork} />
+          {savedStablecoinProfiles.map((profile, index) => (
+            <>
+              <input type="hidden" name="stablecoin_row" value={`wechatpay-${index}`} />
+              <input type="hidden" name={`stablecoin_id:wechatpay-${index}`} value={profile.id} />
+              <input type="hidden" name={`stablecoin_token:wechatpay-${index}`} value={profile.token} />
+              <input type="hidden" name={`stablecoin_label:wechatpay-${index}`} value={profile.label} />
+              <input type="hidden" name={`stablecoin_kind:wechatpay-${index}`} value={profile.kind} />
+              <input type="hidden" name={`stablecoin_receive:wechatpay-${index}`} value={profile.receiveAddress} />
+              <input type="hidden" name={`stablecoin_endpoint:wechatpay-${index}`} value={profile.endpoint} />
+              <input type="hidden" name={`stablecoin_token_address:wechatpay-${index}`} value={profile.tokenAddress} />
+              <input type="hidden" name={`stablecoin_decimals:wechatpay-${index}`} value={String(profile.decimals)} />
+              <input type="hidden" name={`stablecoin_confirmations:wechatpay-${index}`} value={String(profile.confirmations)} />
+              <input type="hidden" name={`stablecoin_enabled:wechatpay-${index}`} value={profile.enabled ? '1' : '0'} />
+            </>
+          ))}
           <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
             WeChat Pay payment URL
             <input
@@ -1167,45 +1328,83 @@ const sections = [
         </form>
       </div>
 
-      {/* USDC direct */}
+      {/* Stablecoin direct */}
       <div class="rounded-lg border border-gray-200 bg-white p-4">
         <div class="mb-3 flex items-center justify-between gap-3">
           <div>
-            <p class="font-medium">USDC direct</p>
-            <p class={pmMap.usdc.installed ? 'text-xs text-gray-500' : 'text-xs text-amber-700'}>
-              {pmMap.usdc.installed ? 'Live' : 'Add a receiving address and network to go live'}
+            <p class="font-medium">USDC / USDT direct</p>
+            <p class={stablecoinInstalled ? 'text-xs text-gray-500' : 'text-xs text-amber-700'}>
+              {stablecoinInstalled ? 'Live' : 'Add at least one enabled token, network, address, endpoint, and token contract'}
             </p>
           </div>
-          {pmMap.usdc.installed && <MethodToggle method="usdc" enabled={pmMap.usdc.enabled} label="USDC direct" />}
+          <div class="flex items-center gap-3">
+            {pmMap.usdt.installed && <MethodToggle method="usdt" enabled={pmMap.usdt.enabled} label="USDT direct" />}
+            {pmMap.usdc.installed && <MethodToggle method="usdc" enabled={pmMap.usdc.enabled} label="USDC direct" />}
+          </div>
         </div>
         <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
           <input type="hidden" name="_action" value="save_direct_wallets" />
           <input type="hidden" name="alipay_payment_url" value={payments.alipayPaymentUrl} />
           <input type="hidden" name="wechatpay_payment_url" value={payments.wechatpayPaymentUrl} />
-          <div class="grid gap-3 sm:grid-cols-[1fr_12rem]">
-            <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
-              USDC receiving address
-              <input
-                type="text"
-                name="usdc_address"
-                value={payments.usdcAddress}
-                placeholder="0x... or Solana address"
-                class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
-              />
-            </label>
-            <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
-              Network
-              <input
-                type="text"
-                name="usdc_network"
-                value={payments.usdcNetwork}
-                placeholder="Polygon"
-                class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
-              />
-            </label>
+          <div class="space-y-3">
+            {stablecoinRows.map((profile, index) => (
+              <div class="space-y-3 rounded-md border border-gray-100 bg-gray-50 p-3">
+                <input type="hidden" name="stablecoin_row" value={String(index)} />
+                <input type="hidden" name={`stablecoin_id:${index}`} value={profile.id} />
+                <div class="grid gap-3 sm:grid-cols-[7rem_11rem_8rem_1fr_5rem]">
+                  <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+                    Token
+                    <select name={`stablecoin_token:${index}`} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">
+                      <option value="usdt" selected={profile.token === 'usdt'}>USDT</option>
+                      <option value="usdc" selected={profile.token === 'usdc'}>USDC</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+                    Network
+                    <input type="text" name={`stablecoin_label:${index}`} value={profile.label} placeholder="Polygon" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                  </label>
+                  <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+                    Chain
+                    <select name={`stablecoin_kind:${index}`} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">
+                      <option value="evm" selected={profile.kind === 'evm'}>EVM</option>
+                      <option value="tron" selected={profile.kind === 'tron'}>TRON</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+                    Receiving address
+                    <input type="text" name={`stablecoin_receive:${index}`} value={profile.receiveAddress} placeholder="0x... / T..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                  </label>
+                  <label class="flex items-end gap-2 pb-2 text-xs font-medium text-gray-600">
+                    <input type="checkbox" name={`stablecoin_enabled:${index}`} value="1" checked={profile.enabled} class="size-4" />
+                    Enable
+                  </label>
+                </div>
+                <details class="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
+                  <summary class="cursor-pointer font-medium text-gray-600">Verification settings</summary>
+                  <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_7rem_7rem]">
+                    <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
+                      RPC / API endpoint
+                      <input type="url" name={`stablecoin_endpoint:${index}`} value={profile.endpoint} placeholder="https://..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                    </label>
+                    <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
+                      Token contract
+                      <input type="text" name={`stablecoin_token_address:${index}`} value={profile.tokenAddress} placeholder="0x... / T..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                    </label>
+                    <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
+                      Decimals
+                      <input type="number" min="2" max="18" name={`stablecoin_decimals:${index}`} value={String(profile.decimals)} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                    </label>
+                    <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
+                      Confirms
+                      <input type="number" min="1" max="200" name={`stablecoin_confirmations:${index}`} value={String(profile.confirmations)} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                    </label>
+                  </div>
+                </details>
+              </div>
+            ))}
           </div>
           <p class="text-xs text-gray-500">
-            Buyers send USDC on this network, then submit the transaction hash or payment reference on your checkout page.
+            Each row is one buyer-selectable token/network. Buyers choose USDC or USDT first, then choose one enabled network for that token on the payment page.
           </p>
           <button type="submit" class="mt-1 rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover">
             Save

@@ -46,6 +46,7 @@ export const ORDER_METHOD_OPTIONS: { value: string; label: string }[] = [
   { value: 'opennode', label: 'Bitcoin (OpenNode)' },
   { value: 'alipay', label: 'Alipay direct' },
   { value: 'wechatpay', label: 'WeChat Pay direct' },
+  { value: 'usdt', label: 'USDT direct' },
   { value: 'usdc', label: 'USDC direct' },
   { value: 'demo', label: 'Demo' },
 ];
