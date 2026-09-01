@@ -65,7 +65,19 @@ const capabilities: RuntimeCapabilities = {
 };
 
 const STABLECOIN_FORM_ROWS = 8;
-const stablecoinDefaults: StablecoinNetworkProfile[] = [
+const stablecoinNetworkPresets: StablecoinNetworkProfile[] = [
+  {
+    id: 'usdc-ethereum',
+    token: 'usdc',
+    label: 'Ethereum',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://ethereum-rpc.publicnode.com',
+    tokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    decimals: 6,
+    confirmations: 12,
+  },
   {
     id: 'usdc-polygon',
     token: 'usdc',
@@ -77,6 +89,54 @@ const stablecoinDefaults: StablecoinNetworkProfile[] = [
     tokenAddress: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359',
     decimals: 6,
     confirmations: 12,
+  },
+  {
+    id: 'usdc-arbitrum',
+    token: 'usdc',
+    label: 'Arbitrum One',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://arb1.arbitrum.io/rpc',
+    tokenAddress: '0xaf88d065e77c8cc2239327c5edb3a432268e5831',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdc-optimism',
+    token: 'usdc',
+    label: 'Optimism',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://mainnet.optimism.io',
+    tokenAddress: '0x0b2c639c533813f4aa9d7837caf62653d097ff85',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdc-avalanche',
+    token: 'usdc',
+    label: 'Avalanche C-Chain',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://api.avax.network/ext/bc/C/rpc',
+    tokenAddress: '0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdc-bnb',
+    token: 'usdc',
+    label: 'BNB Smart Chain',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://bsc-dataseed.binance.org',
+    tokenAddress: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+    decimals: 18,
+    confirmations: 15,
   },
   {
     id: 'usdt-tron',
@@ -91,6 +151,18 @@ const stablecoinDefaults: StablecoinNetworkProfile[] = [
     confirmations: 1,
   },
   {
+    id: 'usdt-ethereum',
+    token: 'usdt',
+    label: 'Ethereum',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://ethereum-rpc.publicnode.com',
+    tokenAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
     id: 'usdt-polygon',
     token: 'usdt',
     label: 'Polygon',
@@ -101,6 +173,54 @@ const stablecoinDefaults: StablecoinNetworkProfile[] = [
     tokenAddress: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
     decimals: 6,
     confirmations: 12,
+  },
+  {
+    id: 'usdt-arbitrum',
+    token: 'usdt',
+    label: 'Arbitrum One',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://arb1.arbitrum.io/rpc',
+    tokenAddress: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdt-optimism',
+    token: 'usdt',
+    label: 'Optimism',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://mainnet.optimism.io',
+    tokenAddress: '0x94b008aa00579c1307b0ef2c499ad98a8ce58e58',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdt-avalanche',
+    token: 'usdt',
+    label: 'Avalanche C-Chain',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://api.avax.network/ext/bc/C/rpc',
+    tokenAddress: '0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7',
+    decimals: 6,
+    confirmations: 12,
+  },
+  {
+    id: 'usdt-bnb',
+    token: 'usdt',
+    label: 'BNB Smart Chain',
+    kind: 'evm',
+    enabled: false,
+    receiveAddress: '',
+    endpoint: 'https://bsc-dataseed.binance.org',
+    tokenAddress: '0x55d398326f99059ff775485246999027b3197955',
+    decimals: 18,
+    confirmations: 15,
   },
   {
     id: 'usdc-base',
@@ -115,6 +235,19 @@ const stablecoinDefaults: StablecoinNetworkProfile[] = [
     confirmations: 12,
   },
 ];
+const stablecoinDefaults = stablecoinNetworkPresets.filter((profile) =>
+  ['usdc-polygon', 'usdt-tron', 'usdt-polygon', 'usdc-base'].includes(profile.id),
+);
+
+function stablecoinNetworkOptionsFor(profile: StablecoinNetworkProfile): StablecoinNetworkProfile[] {
+  if (!profile.label || stablecoinNetworkPresets.some((preset) =>
+    preset.token === profile.token && preset.label.toLowerCase() === profile.label.toLowerCase()
+  )) return stablecoinNetworkPresets;
+  return [
+    ...stablecoinNetworkPresets,
+    { ...profile, id: `${profile.id || profile.token}-custom-option` },
+  ];
+}
 
 function stablecoinProfilesFromForm(form: FormData): StablecoinNetworkProfile[] {
   const slug = (value: string) =>
@@ -1348,25 +1481,43 @@ const sections = [
           <input type="hidden" name="alipay_payment_url" value={payments.alipayPaymentUrl} />
           <input type="hidden" name="wechatpay_payment_url" value={payments.wechatpayPaymentUrl} />
           <div class="space-y-3">
-            {stablecoinRows.map((profile, index) => (
-              <div class="space-y-3 rounded-md border border-gray-100 bg-gray-50 p-3">
+            {stablecoinRows.map((profile, index) => {
+              const networkOptions = stablecoinNetworkOptionsFor(profile);
+              return (
+              <div class="space-y-3 rounded-md border border-gray-100 bg-gray-50 p-3" data-stablecoin-row>
                 <input type="hidden" name="stablecoin_row" value={String(index)} />
                 <input type="hidden" name={`stablecoin_id:${index}`} value={profile.id} />
                 <div class="grid gap-3 sm:grid-cols-[7rem_11rem_8rem_1fr_5rem]">
                   <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
                     Token
-                    <select name={`stablecoin_token:${index}`} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">
+                    <select name={`stablecoin_token:${index}`} data-stablecoin-token class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">
                       <option value="usdt" selected={profile.token === 'usdt'}>USDT</option>
                       <option value="usdc" selected={profile.token === 'usdc'}>USDC</option>
                     </select>
                   </label>
                   <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
                     Network
-                    <input type="text" name={`stablecoin_label:${index}`} value={profile.label} placeholder="Polygon" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                    <select name={`stablecoin_label:${index}`} data-stablecoin-network class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">
+                      <option value="">Select network</option>
+                      {networkOptions.map((option) => (
+                        <option
+                          value={option.label}
+                          selected={profile.label === option.label}
+                          data-kind={option.kind}
+                          data-token={option.token}
+                          data-endpoint={option.endpoint}
+                          data-token-address={option.tokenAddress}
+                          data-decimals={String(option.decimals)}
+                          data-confirmations={String(option.confirmations)}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
                     Chain
-                    <select name={`stablecoin_kind:${index}`} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">
+                    <select name={`stablecoin_kind:${index}`} data-stablecoin-kind class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">
                       <option value="evm" selected={profile.kind === 'evm'}>EVM</option>
                       <option value="tron" selected={profile.kind === 'tron'}>TRON</option>
                     </select>
@@ -1385,24 +1536,24 @@ const sections = [
                   <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_7rem_7rem]">
                     <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
                       RPC / API endpoint
-                      <input type="url" name={`stablecoin_endpoint:${index}`} value={profile.endpoint} placeholder="https://..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                      <input type="url" name={`stablecoin_endpoint:${index}`} value={profile.endpoint} data-stablecoin-endpoint placeholder="https://..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
                     </label>
                     <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
                       Token contract
-                      <input type="text" name={`stablecoin_token_address:${index}`} value={profile.tokenAddress} placeholder="0x... / T..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                      <input type="text" name={`stablecoin_token_address:${index}`} value={profile.tokenAddress} data-stablecoin-token-address placeholder="0x... / T..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
                     </label>
                     <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
                       Decimals
-                      <input type="number" min="2" max="18" name={`stablecoin_decimals:${index}`} value={String(profile.decimals)} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                      <input type="number" min="2" max="18" name={`stablecoin_decimals:${index}`} value={String(profile.decimals)} data-stablecoin-decimals class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
                     </label>
                     <label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">
                       Confirms
-                      <input type="number" min="1" max="200" name={`stablecoin_confirmations:${index}`} value={String(profile.confirmations)} class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                      <input type="number" min="1" max="200" name={`stablecoin_confirmations:${index}`} value={String(profile.confirmations)} data-stablecoin-confirmations class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
                     </label>
                   </div>
                 </details>
               </div>
-            ))}
+            )})}
           </div>
           <p class="text-xs text-gray-500">
             Each row is one buyer-selectable token/network. Buyers choose USDC or USDT first, then choose one enabled network for that token on the payment page.
@@ -1812,6 +1963,62 @@ const sections = [
           }
         });
       });
+    })();
+  </script>
+
+  <script is:inline>
+    // Stablecoin network presets fill the verification fields while keeping the
+    // receiving address editable per row.
+    (function () {
+      function syncStablecoinRow(row, fillFromNetwork) {
+        var token = row.querySelector('[data-stablecoin-token]');
+        var network = row.querySelector('[data-stablecoin-network]');
+        if (!token || !network) return;
+
+        var firstVisible = null;
+        Array.prototype.forEach.call(network.options, function (option) {
+          var optionToken = option.getAttribute('data-token');
+          var visible = !optionToken || optionToken === token.value;
+          option.hidden = !visible;
+          option.disabled = !visible;
+          if (visible && option.value && !firstVisible) firstVisible = option;
+        });
+
+        var selected = network.options[network.selectedIndex];
+        if (selected && selected.disabled) {
+          network.value = firstVisible ? firstVisible.value : '';
+          selected = network.options[network.selectedIndex];
+          fillFromNetwork = true;
+        }
+
+        if (!fillFromNetwork || !selected || !selected.value) return;
+        var kind = row.querySelector('[data-stablecoin-kind]');
+        var endpoint = row.querySelector('[data-stablecoin-endpoint]');
+        var tokenAddress = row.querySelector('[data-stablecoin-token-address]');
+        var decimals = row.querySelector('[data-stablecoin-decimals]');
+        var confirmations = row.querySelector('[data-stablecoin-confirmations]');
+        if (kind && selected.dataset.kind) kind.value = selected.dataset.kind;
+        if (endpoint && selected.dataset.endpoint) endpoint.value = selected.dataset.endpoint;
+        if (tokenAddress && selected.dataset.tokenAddress) tokenAddress.value = selected.dataset.tokenAddress;
+        if (decimals && selected.dataset.decimals) decimals.value = selected.dataset.decimals;
+        if (confirmations && selected.dataset.confirmations) confirmations.value = selected.dataset.confirmations;
+      }
+
+      function syncAllStablecoinRows() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-stablecoin-row]'), function (row) {
+          syncStablecoinRow(row, false);
+        });
+      }
+
+      document.addEventListener('change', function (e) {
+        var target = e.target;
+        if (!target || !target.matches) return;
+        var row = target.closest('[data-stablecoin-row]');
+        if (!row) return;
+        if (target.matches('[data-stablecoin-token]')) syncStablecoinRow(row, true);
+        if (target.matches('[data-stablecoin-network]')) syncStablecoinRow(row, true);
+      });
+      syncAllStablecoinRows();
     })();
   </script>
 
