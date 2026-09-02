@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.7",
-    "@waffo/pancake-ts": "^0.18.0",
+    "@waffo/pancake-ts": "^0.19.1",
     "astro": "^7.1.6",
     "markdown-it": "^15.0.0",
     "stripe": "^22.4.0",
