@@ -3,6 +3,59 @@ import { generateAccessToken, isAccessToken } from '../ids/token.ts';
 import { generatePublicId, isPublicIdConflict } from '../ids/publicId.ts';
 import { guestLinkReissueKind } from '../email/outboxStore.ts';
 
+const ensuredGuestAccessSchema = new WeakSet<D1Database>();
+
+function isDuplicateColumnError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate column name/i.test(message);
+}
+
+async function tableColumns(db: D1Database, table: string): Promise<Set<string>> {
+  const rows = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  return new Set((rows.results ?? []).map((row) => row.name));
+}
+
+async function addColumnIfMissing(
+  db: D1Database,
+  table: string,
+  column: string,
+  ddl: string,
+): Promise<void> {
+  const columns = await tableColumns(db, table);
+  if (columns.has(column)) return;
+  try {
+    await db.prepare(ddl).run();
+  } catch (error) {
+    if (!isDuplicateColumnError(error)) throw error;
+  }
+}
+
+async function ensureGuestAccessSchema(db: D1Database): Promise<void> {
+  if (ensuredGuestAccessSchema.has(db)) return;
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS order_guest_access (
+      order_public_id TEXT NOT NULL PRIMARY KEY,
+      access_token    TEXT NOT NULL UNIQUE,
+      generation      INTEGER NOT NULL DEFAULT 1,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      rotated_at      TEXT
+    )`,
+  ).run();
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS order_reference_aliases (
+      reference       TEXT NOT NULL PRIMARY KEY,
+      order_public_id TEXT NOT NULL UNIQUE
+    )`,
+  ).run();
+  await addColumnIfMissing(
+    db,
+    'order_guest_access',
+    'hidden_at',
+    'ALTER TABLE order_guest_access ADD COLUMN hidden_at TEXT',
+  );
+  ensuredGuestAccessSchema.add(db);
+}
+
 /**
  * Guest-access registry (order_guest_access) — the ONE authoritative mapping
  * from a revocable access token to an order public ID. Created at checkout
@@ -32,6 +85,7 @@ export interface GuestAccess {
 export async function claimOrderIdentity(
   db: D1Database,
 ): Promise<{ publicId: string; accessToken: string }> {
+  await ensureGuestAccessSchema(db);
   for (let i = 0; i < 3; i++) {
     const publicId = generatePublicId('order');
     const accessToken = generateAccessToken();

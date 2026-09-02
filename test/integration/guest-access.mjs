@@ -25,14 +25,6 @@ try {
   // Wrangler integration gate applies every real migration clean-room.
   for (const sql of [
     `CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, public_id TEXT UNIQUE, email TEXT)`,
-    `CREATE TABLE order_guest_access (
-       order_public_id TEXT NOT NULL PRIMARY KEY,
-       access_token    TEXT NOT NULL UNIQUE,
-       generation      INTEGER NOT NULL DEFAULT 1,
-       created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-       rotated_at      TEXT,
-       hidden_at       TEXT
-     )`,
     `CREATE TABLE order_notifications (
        order_id INTEGER NOT NULL, kind TEXT NOT NULL,
        state TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
@@ -44,6 +36,14 @@ try {
   ]) {
     await db.exec(sql.replace(/\n\s*/g, ' '));
   }
+
+  // Historical stores may reach checkout before the companion public-ID
+  // migration has created the guest-access registry. Checkout self-heals the
+  // additive table/column shape instead of surfacing a 500.
+  assert.equal(
+    await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='order_guest_access'").first(),
+    null,
+  );
 
   // Claim at checkout: BOTH halves minted together; token resolves; bare id never.
   const { publicId: orderPublicId, accessToken: token } = await claimOrderIdentity(db);

@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { pendingToPaidOrder, type PendingPayment } from './lightning/pending';
+import { ensurePendingStablecoinSchema, pendingToPaidOrder, type PendingPayment } from './lightning/pending';
 import { recordPaidWebhookOrder } from '../orders/recordWebhook';
 import { getStoreSettings } from '../settings/db';
 import { getSecret } from '../secrets/store';
@@ -278,6 +278,7 @@ async function scanTronGroup(db: D1Database, group: PendingNetworkGroup, origin:
  * pending payment to a different chain or address.
  */
 export async function sweepStablecoinPayments(db: D1Database, origin: string): Promise<void> {
+  await ensurePendingStablecoinSchema(db);
   const groups = await pendingNetworkGroups(db);
   for (const group of groups) {
     try {

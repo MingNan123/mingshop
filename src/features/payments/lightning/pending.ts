@@ -2,6 +2,65 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { PaidOrderInput, OrderItemInput, ShippingAddress } from '../../orders/db';
 import { stablecoinSnapshot, type StablecoinNetworkProfile, type StablecoinToken } from '../stablecoin-networks.ts';
 
+const ensuredStablecoinSchema = new WeakSet<D1Database>();
+
+function isDuplicateColumnError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate column name/i.test(message);
+}
+
+async function tableColumns(db: D1Database, table: string): Promise<Set<string>> {
+  const rows = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  return new Set((rows.results ?? []).map((row) => row.name));
+}
+
+async function addColumnIfMissing(
+  db: D1Database,
+  table: string,
+  column: string,
+  ddl: string,
+): Promise<void> {
+  const columns = await tableColumns(db, table);
+  if (columns.has(column)) return;
+  try {
+    await db.prepare(ddl).run();
+  } catch (error) {
+    if (!isDuplicateColumnError(error)) throw error;
+  }
+}
+
+/**
+ * Cloudflare's Git integration deploys code, not D1 migrations. Keep checkout
+ * from 500ing when a deployment reaches production before additive migration
+ * 0040 has been applied; the migration remains the source of truth.
+ */
+export async function ensurePendingStablecoinSchema(db: D1Database): Promise<void> {
+  if (ensuredStablecoinSchema.has(db)) return;
+  await addColumnIfMissing(
+    db,
+    'pending_payments',
+    'stablecoin_network_id',
+    'ALTER TABLE pending_payments ADD COLUMN stablecoin_network_id TEXT',
+  );
+  await addColumnIfMissing(
+    db,
+    'pending_payments',
+    'stablecoin_network_snapshot',
+    'ALTER TABLE pending_payments ADD COLUMN stablecoin_network_snapshot TEXT',
+  );
+  await addColumnIfMissing(
+    db,
+    'pending_payments',
+    'stablecoin_network_selected_at',
+    'ALTER TABLE pending_payments ADD COLUMN stablecoin_network_selected_at TEXT',
+  );
+  await db.prepare(
+    `CREATE INDEX IF NOT EXISTS idx_pending_stablecoin_network
+      ON pending_payments(backend, status, stablecoin_network_id, created_at)`,
+  ).run();
+  ensuredStablecoinSchema.add(db);
+}
+
 export interface PendingPayment {
   id: number;
   public_id: string;
@@ -49,6 +108,7 @@ export interface NewPendingPayment {
 }
 
 export async function createPendingPayment(db: D1Database, p: NewPendingPayment): Promise<void> {
+  await ensurePendingStablecoinSchema(db);
   await db
     .prepare(
       `INSERT INTO pending_payments
@@ -117,6 +177,7 @@ export async function selectPendingStablecoinNetwork(
   profile: StablecoinNetworkProfile,
   email?: string | null,
 ): Promise<boolean> {
+  await ensurePendingStablecoinSchema(db);
   if (!profile.enabled || profile.token !== token) return false;
   let normalizedEmail: string | null = null;
   if (email != null && email.trim() !== '') {
