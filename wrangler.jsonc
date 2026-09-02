@@ -14,7 +14,7 @@
 	// Per-instance CLI deploys use scripts/provision-cf.sh, which renders an instance
 	// config from wrangler.template.jsonc (real ids) and restores this file after.
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "minshop",
+	"name": "mingshop",
 	"main": "./src/worker.ts",
 	"compatibility_date": "2026-07-20",
 	"compatibility_flags": [
@@ -73,6 +73,7 @@
 		{
 			"binding": "DB",
 			"database_name": "minshop-db",
+			"database_id": "ba688cf8-1514-45b2-841d-f5296260ea89",
 			"migrations_dir": "migrations"
 		}
 	],
