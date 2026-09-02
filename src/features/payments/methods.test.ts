@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { enabledMethods, offeredMethods, isMethodAvailable } from './index';
+import { enabledMethods, offeredMethods, isMethodAvailable, isWebhookPaymentMethod, webhookMethods } from './index';
 import { parseStoreSettings } from '../settings/db';
 
 const usdcProfile = {
@@ -33,6 +33,16 @@ describe('stablecoin-only payment methods', () => {
     expect(isMethodAvailable('alipay', settings)).toBe(false);
     expect(isMethodAvailable('wechatpay', settings)).toBe(false);
     expect(isMethodAvailable('stripe', settings)).toBe(false);
+  });
+
+  it('keeps legacy signed webhook rails available outside new checkout methods', () => {
+    expect(webhookMethods()).toEqual(['stripe', 'waffo', 'lightning', 'opennode']);
+    for (const method of ['stripe', 'waffo', 'lightning', 'opennode']) {
+      expect(isWebhookPaymentMethod(method)).toBe(true);
+    }
+    expect(isWebhookPaymentMethod('usdt')).toBe(false);
+    expect(isWebhookPaymentMethod('usdc')).toBe(false);
+    expect(isWebhookPaymentMethod('demo')).toBe(false);
   });
 
   it('enables a coin when the merchant has an enabled validated network profile', () => {

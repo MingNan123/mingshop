@@ -69,16 +69,18 @@ const PRE_MENU_SCHEMA = `
 const MIGRATION = readFileSync(new URL('../../migrations/0028_nav_menus.sql', import.meta.url), 'utf8');
 
 /**
- * Strip whole-line comments FIRST, then split on ';'.
+ * Strip comments FIRST, then split on ';'.
  *
  * Splitting first and discarding chunks that begin with '--' silently drops every
  * statement preceded by a comment block — which, in this migration, is all of
- * them. The migration has no semicolons or '--' inside string literals.
+ * them. Inline `--` comments also have to go before Miniflare/D1 receives a
+ * one-line statement, otherwise they comment out the rest of that statement.
+ * The migration has no semicolons or '--' inside string literals.
  */
 const statements = (sql) =>
   sql
-    .split('\n')
-    .map((line) => line.replace(/^\s*--.*$/, ''))
+    .split(/\r?\n/)
+    .map((line) => line.replace(/--.*$/, ''))
     .join('\n')
     .split(';')
     .map((s) => s.replace(/\s+/g, ' ').trim())

@@ -32,6 +32,7 @@ export interface ActivePaymentMethodList extends Array<ActivePaymentMethod> {
 // below so historical webhooks/orders are still readable and serviceable.
 const ALL_METHODS: ActivePaymentMethod[] = ['usdt', 'usdc'];
 const OFFERED: ActivePaymentMethod[] = ['usdt', 'usdc'];
+const WEBHOOK_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
   return ['stripe','waffo','lightning','opennode','alipay','wechatpay','usdc','usdt','demo'].includes(value);
@@ -62,6 +63,14 @@ export function enabledMethods(settings: StoreSettings, vault = vaultReady()): A
 export function offeredMethods(settings: StoreSettings, _vault = vaultReady()): ActivePaymentMethodList {
   const off = new Set(settings.disabledPaymentMethods);
   return OFFERED.filter((m) => !off.has(m)) as ActivePaymentMethodList;
+}
+
+export function isWebhookPaymentMethod(value: string): value is PaymentMethod {
+  return (WEBHOOK_METHODS as string[]).includes(value);
+}
+
+export function webhookMethods(): PaymentMethod[] {
+  return [...WEBHOOK_METHODS];
 }
 
 export async function getPaymentProvider(method?: PaymentMethod): Promise<PaymentProvider> {

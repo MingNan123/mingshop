@@ -914,14 +914,14 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     throw error;
   }
 
-  // Lightning: surface the BOLT11 invoice so an agent with a wallet can pay it
-  // directly (no human, no /pay page). Settlement is confirmed by the existing
-  // webhook → the order is recorded. Hosted providers expose checkout_url only.
+  // Stablecoins expose the in-app `/pay` handoff where the buyer chooses an
+  // enabled network/address. Lightning legacy API calls still surface BOLT11.
   const ln = result.lightning;
+  const stablecoin = method === 'usdc' || method === 'usdt';
   return cjson({
-    method, // the rail used: 'stripe' | 'lightning' | 'opennode'
+    method,
     available_methods: available, // what else this store offers
-    flow: ln ? 'invoice' : 'redirect',
+    flow: stablecoin ? 'stablecoin' : ln ? 'invoice' : 'redirect',
     checkout_url: result.url, // human fallback (QR page for Lightning, hosted page otherwise)
     ...(lifecycleActive() ? { order_status_url: `${origin}/order/${accessToken}/status` } : {}),
     ...(ln && {
@@ -951,7 +951,9 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       unit_price_cents: l.unitPriceCents,
       line_total_cents: l.unitPriceCents * l.qty,
     })),
-    note: ln
+    note: stablecoin
+      ? `Open checkout_url, choose an enabled ${method.toUpperCase()} network, and pay the fixed amount shown there. The order is recorded once settlement is verified.`
+      : ln
       ? 'Pay the BOLT11 `lightning.invoice` from any Lightning wallet — no human needed; the order is recorded once settlement is confirmed. Or open checkout_url for the QR page.'
       : 'Open checkout_url to complete payment. Shipping, tax, and discounts (if enabled) are applied on the hosted checkout page.',
   });

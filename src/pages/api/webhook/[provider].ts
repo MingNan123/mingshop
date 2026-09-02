@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import {
   getPaymentProvider,
-  isMethodAvailable,
+  isWebhookPaymentMethod,
   type PaymentMethod,
 } from '../../../features/payments';
 import { getStoreSettings } from '../../../features/settings/db';
@@ -10,15 +10,13 @@ import { recordPaidWebhookOrder } from '../../../features/orders/recordWebhook';
 
 export const prerender = false;
 
-const METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
-
 // Per-provider webhook: POST /api/webhook/<method>. Each rail has its own
 // signature scheme, so it must terminate at a provider-specific endpoint.
 export const POST: APIRoute = async ({ request, params }) => {
   const method = params.provider as PaymentMethod;
   const settings = await getStoreSettings(env.DB);
-  if (!METHODS.includes(method) || !isMethodAvailable(method, settings)) {
-    return new Response('Unknown or unconfigured payment method', { status: 404 });
+  if (!isWebhookPaymentMethod(method)) {
+    return new Response('Unknown payment webhook', { status: 404 });
   }
 
   // Waffo signature verification depends on the exact raw request body.

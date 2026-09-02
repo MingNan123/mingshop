@@ -5,7 +5,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/create-minshop)](https://www.npmjs.com/package/create-minshop)
 [![License: MIT](https://img.shields.io/github/license/ddyy/minshop)](LICENSE)
 
-An open-source store an agent can pay for itself. Agents read the catalog and pay a Lightning invoice with no human in the loop — over plain JSON or over MCP; people check out the normal way with Stripe. Merchants can run the store over MCP too.
+An open-source store an agent can pay for itself. Agents read the catalog and start a USDC/USDT checkout with no human in the loop — over plain JSON or over MCP; people use the same stablecoin checkout in the browser. Merchants can run the store over MCP too.
 
 It's a small, server-rendered store for Cloudflare Workers (D1 + R2) with a full admin, multiple payment rails, and an optional MCP server, within the free tier to start. No brand is baked in: store name and time zone are set during onboarding, so it clones cleanly as a template.
 
@@ -16,18 +16,18 @@ It's a small, server-rendered store for Cloudflare Workers (D1 + R2) with a full
 <table>
   <tr>
     <td><a href="docs/media/storefront-desktop.png"><img src="docs/media/storefront-desktop.png" alt="Storefront catalog"></a></td>
-    <td><a href="docs/media/cart-payment-rails.png"><img src="docs/media/cart-payment-rails.png" alt="Cart with card, Lightning, and demo payment rails"></a></td>
+    <td><a href="docs/media/cart-payment-rails.png"><img src="docs/media/cart-payment-rails.png" alt="Cart with stablecoin payment rails"></a></td>
   </tr>
   <tr>
     <td align="center">Storefront</td>
-    <td align="center">Cart with three payment rails</td>
+    <td align="center">Cart with stablecoin rails</td>
   </tr>
   <tr>
-    <td><a href="docs/media/lightning-invoice.png"><img src="docs/media/lightning-invoice.png" alt="Lightning invoice checkout"></a></td>
+    <td><a href="docs/media/lightning-invoice.png"><img src="docs/media/lightning-invoice.png" alt="Stablecoin checkout"></a></td>
     <td><a href="docs/media/admin-dashboard.png"><img src="docs/media/admin-dashboard.png" alt="Admin dashboard"></a></td>
   </tr>
   <tr>
-    <td align="center">Lightning checkout</td>
+    <td align="center">Stablecoin checkout</td>
     <td align="center">Admin</td>
   </tr>
 </table>
@@ -56,7 +56,7 @@ MCP dependencies. Use `--no-install` to only scaffold the files, or
 - **Search** — FTS5 full-text (bm25, prefix match, typo-correct), no JS — or optional **semantic search** via Workers AI + Vectorize (see [Search](#search))
 - **Categories** — nested (arbitrary-depth tree), many-to-many with products; storefront category pages with breadcrumbs + sub-category drill-down (recursive descendant queries)
 - **Admin** — products, categories, pages, media, orders, customers, fulfillment, CSV export, and runtime store settings
-- **Payments** — Stripe Checkout, self-hosted Bitcoin Lightning (phoenixd or LNbits), hosted OpenNode, or a built-in demo rail; configure enabled methods and the default in Admin (see [Payments](#payments))
+- **Payments** — direct USDC/USDT checkout with buyer-selectable networks and Admin-managed receiving addresses; legacy Stripe/Lightning/OpenNode webhook adapters remain for older orders (see [Payments](#payments))
 - **Shipping** — merchant-managed zones, flat **or weight-banded** rates, and free-over-threshold rules, edited in Admin with no redeploy; supported checkout flows capture the address, chosen service, and shipping cost on the order
 - **Discount codes** — promo-code field enabled from Admin; codes are created/managed in the Stripe Dashboard, and the applied discount is captured onto the order
 - **Tax** — sales tax / VAT via Stripe Tax (off by default — **activate Stripe Tax in the Dashboard first**); computed from the customer address and captured onto the order
@@ -70,13 +70,13 @@ MCP dependencies. Use `--no-install` to only scaffold the files, or
 
 A few decisions in here are worth reading even if you never deploy a store:
 
-- **Payments sit behind a port.** Checkout and webhook routes depend on a `PaymentProvider` interface rather than any one vendor. Stripe, Lightning (phoenixd or LNbits), OpenNode, and the demo rail are adapters, so adding a rail is one adapter plus its webhook route. Storage works the same way (`StorageProvider`, with R2 as the adapter).
+- **Payments sit behind a port.** Checkout and webhook routes depend on a `PaymentProvider` interface rather than any one vendor. New checkout offers USDC/USDT stablecoin rails, while legacy Stripe, Lightning (phoenixd or LNbits), and OpenNode adapters can still verify signed callbacks for historical orders. Storage works the same way (`StorageProvider`, with R2 as the adapter).
 - **HTML first, JS as enhancement.** Pages render on the server and ship near-zero client JavaScript. Cart, search, and checkout all work with JS disabled; the cart drawer and live search are progressive enhancements layered on plain forms.
 - **Search without a search service.** Full-text search runs on SQLite FTS5 inside D1, with bm25 ranking, prefix matching, and typo correction. Semantic search (Workers AI + Vectorize) is an optional flag, not a dependency.
 - **Cache invalidation follows what shoppers can see.** Cached pages carry `shell`, `catalog`, and per-product tags. Admin writes purge only the affected tags, and stock changes purge a product only when it crosses In stock / Low stock / Sold out, not on every checkout reservation. The page shell stays shared even for cookied shoppers because the one personal detail, the cart count, loads from a small private fragment.
-- **Provider keys are write-only.** Stripe, Lightning, and email credentials are entered in Admin, encrypted under a KEK before they reach D1, and never displayed again. The Worker itself needs exactly two secrets.
+- **Provider keys are write-only.** Payment, node, and email credentials are entered in Admin, encrypted under a KEK before they reach D1, and never displayed again. The Worker itself needs exactly two secrets.
 - **Refactors are gated by equivalence tests.** The Vitest suite (70 test files) renders `.astro` components through AstroContainer and includes contract tests plus rendering baselines, so template extractions have to prove they didn't change the output a customer sees.
-- **The same store serves people and agents.** Catalog and checkout are exposed as HTML, as JSON (`/api/products`, `/api/checkout`), and over MCP — all three reach the same checkout, so an agent can browse the catalog and settle a Lightning invoice with no human in the loop.
+- **The same store serves people and agents.** Catalog and checkout are exposed as HTML, as JSON (`/api/products`, `/api/checkout`), and over MCP — all three reach the same checkout, so an agent can browse the catalog and create a USDC/USDT payment intent with no human in the loop.
 
 ## Stack
 
@@ -86,7 +86,7 @@ A few decisions in here are worth reading even if you never deploy a store:
 | Styling | Tailwind CSS v4 (`@tailwindcss/vite`) |
 | Data | Cloudflare D1 (SQLite) — products, orders |
 | Images | Cloudflare R2 — zero egress |
-| Payments | Stripe Checkout, Bitcoin Lightning (phoenixd / LNbits), OpenNode, or demo |
+| Payments | Direct USDC/USDT checkout with Admin-managed networks and receiving addresses |
 
 ## Quick start (local)
 
@@ -114,9 +114,9 @@ npm run test:d1   # fresh migrations + seed + built Worker against isolated D1
 
 Covers the pure functions — `slugify`, the FTS search sanitizer + edit-distance, `parseProductForm`, image validation, cart counting, reservation target aggregation, the order-number scheme, the Access-JWT verifier, pagination clamping, and the whitelisted `orderByClause` sort builders (the SQL-injection boundary for sortable tables). `npm run test:d1` adds clean-room D1 gates for reservation concurrency/release/settlement/legacy compatibility, then boots the production Worker against an isolated database and runs a demo checkout through paid-order settlement and confirmation. `npm run verify` runs both suites, full Astro diagnostics, the production build, and the MCP typecheck/deployment dry run.
 
-### Testing payments locally
+### Testing legacy webhooks locally
 
-Paste your `sk_test_…` key in **Admin → Settings → Payments → Card (Stripe)**, then forward Stripe events to your dev server with the [Stripe CLI](https://docs.stripe.com/stripe-cli):
+New checkout uses direct USDC/USDT receiving addresses. If you still have older Stripe orders or are testing the legacy webhook adapter, paste your `sk_test_…` key in **Admin → Settings → Payments → Card (Stripe)**, then forward Stripe events to your dev server with the [Stripe CLI](https://docs.stripe.com/stripe-cli):
 
 ```sh
 stripe listen --forward-to localhost:4321/api/webhook
@@ -175,7 +175,7 @@ openssl rand -base64 32 | npx wrangler secret put SECRETS_KEK   # encrypts the k
 npm run deploy                     # migrate, build, deploy, then purge shared cache if enabled
 ```
 
-Then open the site — it funnels to the **setup wizard**: set the admin password (required to finish; until then `/admin/setup` is open, so do it right away or front `/admin` with Access), then paste your payment keys in **Settings → Payments**. Finally point a **production Stripe webhook** at `https://<your-host>/api/webhook/stripe` (events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, and `charge.refunded`; async success fulfils delayed methods, failure/expiry releases held inventory, and `charge.refunded` keeps refunds made in the Stripe Dashboard — including partial ones — in sync with your order totals) and paste its `whsec_…` signing secret in the same card. Tear an instance down with `npm run destroy:cf <slug>`; reset its data in place with `npm run reset:remote`.
+Then open the site — it funnels to the **setup wizard**: set the admin password (required to finish; until then `/admin/setup` is open, so do it right away or front `/admin` with Access), then add your USDC/USDT networks and receiving addresses in **Settings → Payments**. Legacy Stripe/Lightning/OpenNode webhooks can remain pointed at `/api/webhook/<provider>` while older orders settle or refund, but they are no longer offered for new checkout. Tear an instance down with `npm run destroy:cf <slug>`; reset its data in place with `npm run reset:remote`.
 
 ## Admin auth
 
@@ -302,23 +302,24 @@ it is currently a beta interface.
 
 ## Payments
 
-Checkout and the webhook depend on a `PaymentProvider` port (`src/features/payments`). Every rail is configured in **Admin → Settings → Payments** — its keys go in the encrypted vault, its config (default rail, node URLs) in D1 settings; a rail's checkout button appears automatically once its key is set, and the always-on **Demo** checkout works with zero keys. Demo reserves and decreases inventory like a real checkout, but never charges the buyer. The "default rail" selector picks which one is offered first:
+Checkout and settlement depend on the `PaymentProvider` port (`src/features/payments`). New checkout deliberately offers only direct USDC/USDT payments. Each enabled Admin row is one buyer-selectable token/network profile; the buyer sees the fixed amount and receiving address on `/pay`, and the order is created only after settlement verifies.
 
 | Rail | What it is | Setup (all in Settings → Payments) |
 |---|---|---|
-| `stripe` *(default)* | Hosted card checkout | paste the secret key + webhook signing secret |
-| `lightning` | Bitcoin Lightning via a **self-hosted** node — minshop mints a BOLT11 invoice and renders its own `/pay` page (QR + `lightning:` link), then confirms settlement | run **phoenixd** or **LNbits** (below); enter its URL + key |
-| `opennode` | **Hosted** Lightning checkout (custodial processor) — redirect + webhook, like Stripe | paste the OpenNode API key |
+| `usdc` | Direct USDC checkout on an enabled EVM/TRON-style profile | label, network, chain kind, receiving address, RPC/API endpoint, token contract, decimals, confirmations |
+| `usdt` | Direct USDT checkout on an enabled EVM/TRON-style profile | label, network, chain kind, receiving address, RPC/API endpoint, token contract, decimals, confirmations; TronGrid key if using the official TRON endpoint |
 
-Two ports, nested: the outer `PaymentProvider` (stripe / lightning / opennode) and an inner `LightningBackend` (phoenixd / lnbits) shared by the self-rendered flow. Adding another node is one adapter file.
+Legacy Stripe, Lightning, OpenNode, and Waffo providers stay available only for signed webhook compatibility with older orders, refunds, and migrations. They are not returned by `GET /api/checkout` and are not available for new sales.
 
-**How settlement is trusted.** Lightning webhooks are treated as an untrusted *nudge* — on receipt minshop **re-polls the node** for the payment (the authority), so a forged webhook can't fake a sale. The `/pay` page also settles on load by polling, so it works even with no public webhook (e.g. local dev). Orders stay "paid-only": unpaid invoices live in a `pending_payments` table, never in `orders`.
+**How settlement is trusted.** The browser `/pay` page and polling/webhook paths do not create an order just because a buyer clicked checkout. They verify the observed transfer against the pending payment: token, network, receiving address, expected amount, confirmations, and expiry have to match before the order is marked paid.
 
-**Shipping (in-app rails).** When shipping is enabled, the Lightning, OpenNode, and Demo carts route through minshop's own `/checkout` page — a server-rendered address + shipping-option step priced from the Admin-managed zones (see [Shipping](#shipping-and-order-email)) — so the invoice total includes shipping and the address + email land on the order, same as Stripe. The Demo rail arrives with a sample address prefilled (it ships nowhere; the step exists to exercise the real rate configuration). Programmatic checkout accepts the same address as a `ship_to` object. (Stripe keeps its own hosted address/shipping collection, unchanged.)
+**Shipping (in-app rails).** When shipping is enabled, stablecoin checkout routes through minshop's own `/checkout` page — a server-rendered address + shipping-option step priced from the Admin-managed zones (see [Shipping](#shipping-and-order-email)) — so the fixed payable total includes shipping and the address + email land on the order. Programmatic checkout accepts the same address as a `ship_to` object.
 
-**Limitations (Lightning).** **Tax** and promo codes are still Stripe-Checkout features and are skipped on the Lightning path — to charge tax on a non-Stripe rail you'd compute it yourself (e.g. Stripe's Tax *Calculation* API) and add it to the total. No automatic refunds (Lightning can't reverse in place). Invoices are priced in sats from a BTC spot rate fetched at checkout (`payments.lightning.rateUrl`, default Coinbase — no key).
+**Limitations.** Direct stablecoin payments cannot be reversed automatically like a card refund. Treat refunds as an operational action you record and execute with your own wallet/provider. Tax and promo-code automation remain provider-specific integrations, so if you need them on direct stablecoins you should compute those amounts before issuing the pending payment.
 
-### Running phoenixd (recommended self-hosted backend)
+### Legacy Lightning adapters
+
+These notes remain for stores that still have older Lightning/OpenNode orders or want to keep their signed webhook callbacks alive. New checkout no longer offers these rails.
 
 [phoenixd](https://phoenix.acinq.co/server) is ACINQ's self-custodial headless daemon — no full Bitcoin node, no manual channel management (ACINQ is the LSP), mainnet (real sats).
 
@@ -387,7 +388,7 @@ Most settings are **runtime** — changed in **`/admin/settings`**, stored in a 
 - **General** — store name.
 - **Features** — cart/checkout, "Buy now", discounts, tax, customer accounts, shipping, and upload optimization.
 - **Images** — original delivery or responsive Cloudflare on-demand transformations.
-- **Payments** — one card per rail (Stripe / Lightning / OpenNode / Demo): its on/off toggle, config (node URLs, default rail), and keys.
+- **Payments** — USDC/USDT receiving profiles, enabled networks, verification settings, and related API keys; legacy provider credentials can remain for signed callback compatibility.
 - **Email** — on/off, provider (Resend / Cloudflare), from-address, key, send-test button.
 - **Bot protection** — Turnstile toggle + sitekey + secret.
 - **Search** — keyword (FTS5) vs semantic (Workers AI + Vectorize) + reindex.
@@ -599,7 +600,7 @@ In local dev the magic link is also logged to the server console, so you can tes
 
 The live demo is `https://demo-mcp.minshop.dev/mcp` — the buyer tier is open, so an MCP client can browse and buy from it with no configuration beyond that URL.
 
-**Buyer tools:** `browse_products`, `get_product_details`, `payment_methods`, `create_checkout`, `check_order_status`. `create_checkout` returns an `order_status_url` and, on the Lightning rail, a payable BOLT11 invoice — so an agent with a wallet can complete a purchase and poll for its downloads with no human in the loop.
+**Buyer tools:** `browse_products`, `get_product_details`, `payment_methods`, `create_checkout`, `check_order_status`. `create_checkout` returns a stablecoin checkout URL plus an `order_status_url`, so an agent with wallet capability can complete a purchase and poll for its downloads with no human in the loop.
 
 **Operator tools** (added by a valid token): `list_products`, `get_product`, `list_orders`, `get_order`, `order_stats`, `daily_totals` (reads) + `create_product`, `update_product`, `fulfill_order` (writes).
 
@@ -620,7 +621,7 @@ The two list tools accept `limit` and `offset` and return the page alongside `to
 **Auth:** a bearer token gates the *operator* tier only. Set `MCP_TOKEN`; operator clients send `Authorization: Bearer <token>`. An invalid token is a 401, never a silent downgrade to buyer tools. With `MCP_TOKEN` unset the operator tier is unavailable (503 if a header is presented) while the buyer tier keeps working — a store with no token can still sell to agents. (Cloudflare's Workers OAuth Provider is the upgrade for scoped/multi-user operator access.)
 
 ```sh
-cd mcp && npm install && cd ..
+cd mcp && npm ci && cd ..
 cp mcp/.dev.vars.example mcp/.dev.vars      # set MCP_TOKEN
 npm run mcp:dev                              # local, shares the storefront's local D1
 npm run mcp:check                            # dry-run build
@@ -652,11 +653,11 @@ Each product is self-describing — `id` is the prefixed public ID (`prod_…`; 
   "url": "https://…/products/merino-wool-beanie" }
 ```
 
-`POST /api/checkout` recalculates price and stock from D1. Item selectors are the catalog's public IDs: `product_id` (`prod_…`) is canonical, with `slug` accepted as a documented convenience; `variant_id` (`var_…`) and `extra_ids` (`["xtra_…"]`) come from the product detail route. **Numeric IDs are rejected with 400** (including the legacy numeric `extras` array). Set `method` to one of the values returned by `GET /api/checkout`; omitting it uses the default. Stripe and OpenNode return `flow: "redirect"` with a hosted `checkout_url`. Lightning returns `flow: "invoice"`, a browser/QR fallback in `checkout_url`, and a directly payable BOLT11 invoice:
+`POST /api/checkout` recalculates price and stock from D1. Item selectors are the catalog's public IDs: `product_id` (`prod_…`) is canonical, with `slug` accepted as a documented convenience; `variant_id` (`var_…`) and `extra_ids` (`["xtra_…"]`) come from the product detail route. **Numeric IDs are rejected with 400** (including the legacy numeric `extras` array). Set `method` to one of the values returned by `GET /api/checkout`; omitting it uses the default. USDC/USDT return a stablecoin payment flow with a browser/QR fallback in `checkout_url`:
 
 ```json
 {
-  "method": "lightning",
+  "method": "usdc",
   "items": [
     { "product_id": "prod_k7m2qx8vn6", "quantity": 1,
       "variant_id": "var_n9fx2km7qc", "extra_ids": ["xtra_q3vr8jm2np"] }
@@ -675,21 +676,20 @@ Each product is self-describing — `id` is the prefixed public ID (`prod_…`; 
 }
 ```
 
-When shipping is enabled, `ship_to` is required for every rail that collects the address itself (Lightning, OpenNode, Demo); `shipping_label` is optional and defaults to the first rate for `ship_to.country`. For **Stripe**, pass an optional `ship_country` (ISO alpha-2) instead — the session is priced for that country and Stripe collects an address only there; without it the first Stripe-supported configured country is used. When shipping is off, omit these fields. A successful Lightning response includes:
+When shipping is enabled, `ship_to` is required for stablecoin checkout; `shipping_label` is optional and defaults to the first rate for `ship_to.country`. When shipping is off, omit these fields. A successful stablecoin response includes:
 
 ```json
 {
-  "flow": "invoice",
+  "method": "usdc",
+  "available_methods": ["usdt", "usdc"],
+  "flow": "stablecoin",
   "checkout_url": "https://shop.example/pay/…",
   "order_status_url": "https://shop.example/order/…/status",
-  "lightning": {
-    "invoice": "lnbc…",
-    "amount_sat": 12345,
-    "payment_hash": "…",
-    "expires_at": "2026-07-23T20:30:00.000Z"
-  },
+  "order_public_id": "ord_…",
+  "currency": "USD",
   "shipping_cents": 500,
-  "total_cents": 3700
+  "total_cents": 3700,
+  "note": "Open checkout_url, choose an enabled USDC network, and pay the fixed amount shown there."
 }
 ```
 
@@ -701,16 +701,14 @@ The order is recorded only after the existing settlement verifier confirms payme
 node scripts/agent-demo.mjs https://<your-host> "warm hat" 40
 # Search "warm hat" under 40: 3 in-stock candidate(s)
 #   USD 32  Merino Wool Beanie  [merino-wool-beanie]   ← picked (most relevant in budget)
-# → prints the full Stripe checkout URL
+# → prints the full stablecoin checkout URL
 ```
 
 Or just ask any tool-using LLM:
 
 > "Using `<host>/api/products`, find a warm hat under $40, then `POST /api/checkout` with `{items:[{product_id,quantity}]}` (the catalog's `prod_…` id) and give me the checkout URL."
 
-Complete payment with the Stripe **test** card `4242 4242 4242 4242` (any future expiry/CVC/postal) — prod runs Stripe test keys, so **nothing is charged**; the order then appears in `/admin → Orders`.
-
-> **Gotcha:** the checkout URL's `#`-fragment carries the session token — copy/print it **whole**. A truncated link yields Stripe's "Something went wrong".
+Complete payment from a wallet on the selected enabled network; once settlement verifies, the order appears in `/admin → Orders`.
 
 ## Cost
 

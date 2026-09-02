@@ -1,29 +1,30 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { getPaymentProvider, defaultMethod } from '../../features/payments';
+import { getPaymentProvider, webhookMethods } from '../../features/payments';
 import { getStoreSettings } from '../../features/settings/db';
 import { recordPaidWebhookOrder } from '../../features/orders/recordWebhook';
 
 export const prerender = false;
 
-// Default-provider payment webhook (the store's primary rail — e.g. Stripe's
-// dashboard points here). Additional rails running alongside it post to their own
-// path, /api/webhook/<method>, since one endpoint can only verify one signature.
-// Provider-agnostic: the provider verifies + normalizes; the helper persists + emails.
+// Legacy catch-all webhook. New provider integrations use /api/webhook/<method>,
+// but older Stripe dashboards may still point at /api/webhook. Try only providers
+// that have real webhook verification; whichever validates the payload settles it.
 export const POST: APIRoute = async ({ request }) => {
   const payload = await request.text();
   const origin = new URL(request.url).origin;
   const settings = await getStoreSettings(env.DB);
-  const method = defaultMethod(settings);
+  const errors: string[] = [];
 
-  let result;
-  try {
-    const provider = await getPaymentProvider(method);
-    result = await provider.verifyWebhook(payload, request.headers);
-  } catch (err) {
-    return new Response(`Webhook verification failed: ${(err as Error).message}`, { status: 400 });
+  for (const method of webhookMethods()) {
+    try {
+      const provider = await getPaymentProvider(method);
+      const result = await provider.verifyWebhook(payload, request.headers);
+      await recordPaidWebhookOrder(result, origin, method, settings);
+      return new Response('ok', { status: 200 });
+    } catch (err) {
+      errors.push(`${method}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
-  await recordPaidWebhookOrder(result, origin, method, settings);
-  return new Response('ok', { status: 200 });
+  return new Response(`Webhook verification failed: ${errors.join('; ')}`, { status: 400 });
 };

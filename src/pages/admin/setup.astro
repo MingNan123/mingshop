@@ -80,7 +80,7 @@ const catalogEmpty = await catalogIsEmpty(env.DB);
 
       <section class="rounded-lg border border-line bg-white p-5">
         <h2 class="text-sm font-semibold uppercase tracking-widest text-gray-500">支付设置</h2>
-        <p class="mt-2 text-sm text-gray-500"><strong>演示结账</strong>可以立即使用。真实支付方式可以稍后在「设置 → 支付」中配置，例如银行卡、Bitcoin Lightning 或 OpenNode。</p>
+        <p class="mt-2 text-sm text-gray-500">真实支付方式可以稍后在「设置 → 支付」中配置：添加 USDC / USDT 收款地址，启用对应网络后即可收款。</p>
       </section>
 
       {catalogEmpty && <label class="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" name="seed_demo" class="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand" /><span>加载<strong>演示商品目录</strong>——包含 6 个分类、30 个示例商品，用于体验商城。取消勾选则从空商城开始。</span></label>}

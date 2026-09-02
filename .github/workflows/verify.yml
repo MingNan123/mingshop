@@ -32,10 +32,10 @@ jobs:
           node-version: 22
 
       - name: Install storefront dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Install MCP dependencies
-        run: npm install --prefix mcp --no-audit --no-fund
+        run: npm ci --prefix mcp --no-audit --no-fund
 
       - name: Create isolated Wrangler configuration
         run: |
@@ -90,7 +90,7 @@ jobs:
         with:
           node-version: 22
       - name: Install storefront dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Create isolated Wrangler configuration
         run: |
           sed \

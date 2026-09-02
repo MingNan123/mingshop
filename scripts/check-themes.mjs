@@ -28,7 +28,7 @@
  * Usage: node scripts/check-themes.mjs [dir...]
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { dirname, join, normalize, relative } from 'node:path';
+import { dirname, join, normalize } from 'node:path';
 import { THEMES_DIR, discoverThemeIds } from './themes.mjs';
 
 const CONTROLS_DIR = 'src/features/storefront/controls';
@@ -91,6 +91,8 @@ const DENIED_MODULES = [
 ];
 
 const SOURCE_EXTENSIONS = ['.astro', '.ts', '.tsx', '.mjs', '.js'];
+const toRepoPath = (value) => value.replace(/\\/g, '/');
+const isWithinRoot = (root, file) => file === root || file.startsWith(`${root}/`);
 
 /**
  * Comments are stripped before scanning. Storefront files are expected to
@@ -150,7 +152,7 @@ async function resolveLocal(specifier, fromFile) {
   ];
   for (const candidate of candidates) {
     try {
-      if ((await stat(candidate)).isFile()) return candidate;
+      if ((await stat(candidate)).isFile()) return toRepoPath(candidate);
     } catch {
       // Keep trying; an unresolvable specifier is reported by the caller.
     }
@@ -170,7 +172,7 @@ async function* walk(dir) {
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) yield* walk(full);
-    else if (SOURCE_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) yield full;
+    else if (SOURCE_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) yield toRepoPath(full);
   }
 }
 
@@ -219,7 +221,7 @@ function checkRequestContext(file, source) {
  * controls, and files inside their own candidate root.
  */
 function checkTemplateImport({ specifier, typeOnly }, resolved, file, rootDir) {
-  if (resolved && !relative(rootDir, resolved).startsWith('..')) return;
+  if (resolved && isWithinRoot(rootDir, resolved)) return;
   if (resolved === MODELS_MODULE) {
     if (!typeOnly) {
       problems.push(
@@ -281,7 +283,7 @@ async function checkEntry(entry, rootDir, policy) {
 
 const paths = process.argv.slice(2);
 for (const rawRoot of paths.length > 0 ? paths : defaultPaths()) {
-  const root = rawRoot.replace(/\/+$/, '');
+  const root = toRepoPath(rawRoot).replace(/\/+$/, '');
   // A root named `controls` takes the core-control policy. Matching the
   // directory name rather than one hardcoded path lets the same checker be
   // pointed at a candidate theme or a future preset.
