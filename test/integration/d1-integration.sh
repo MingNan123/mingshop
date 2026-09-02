@@ -203,6 +203,21 @@ cart_status="$(curl --max-time 30 --silent --output /dev/null --write-out '%{htt
 cart_count_json="$(curl --max-time 30 --fail --silent --show-error --cookie "$cookie_jar" "http://127.0.0.1:$test_port/partials/cart-count")"
 node -e 'const b=JSON.parse(process.argv[1]); if(b.count!==1) throw new Error(`expected cart count 1, got ${b.count}`)' "$cart_count_json"
 
+# Physical express checkout must collect address/shipping before creating any
+# pending stablecoin payment. Both USDC and USDT share that in-app step; sending
+# either directly to /api/checkout lets the provider defense raise a 500.
+express_body="$state_dir/express.html"
+curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/express?product_id=$sample_id" >"$express_body"
+node - "$express_body" <<'NODE'
+const fs = require('node:fs');
+const html = fs.readFileSync(process.argv[2], 'utf8');
+for (const method of ['usdc', 'usdt']) {
+  const form = html.match(new RegExp(`<form[^>]*action="/checkout"[^>]*>[\\s\\S]*?<input[^>]*name="method"[^>]*value="${method}"[\\s\\S]*?</form>`));
+  if (!form) throw new Error(`physical ${method.toUpperCase()} express checkout did not route through /checkout`);
+  if (!/method="GET"/.test(form[0])) throw new Error(`physical ${method.toUpperCase()} express checkout must use GET for the address step`);
+}
+NODE
+
 # ── Stablecoin checkout contract ────────────────────────────────────────────
 # New sales accept only USDC/USDT. A physical USDT order must collect ship_to,
 # price shipping on the server, hold inventory, then lock exactly one merchant-
