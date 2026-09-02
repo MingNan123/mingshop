@@ -64,7 +64,7 @@ const capabilities: RuntimeCapabilities = {
   vectorize: !!env.VECTORIZE,
 };
 
-const STABLECOIN_FORM_ROWS = 8;
+const STABLECOIN_MAX_ROWS = 12;
 const stablecoinNetworkPresets: StablecoinNetworkProfile[] = [
   {
     id: 'usdc-ethereum',
@@ -235,10 +235,6 @@ const stablecoinNetworkPresets: StablecoinNetworkProfile[] = [
     confirmations: 12,
   },
 ];
-const stablecoinDefaults = stablecoinNetworkPresets.filter((profile) =>
-  ['usdc-polygon', 'usdt-tron', 'usdt-polygon', 'usdc-base'].includes(profile.id),
-);
-
 function stablecoinNetworkOptionsFor(profile: StablecoinNetworkProfile): StablecoinNetworkProfile[] {
   if (!profile.label || stablecoinNetworkPresets.some((preset) =>
     preset.token === profile.token && preset.label.toLowerCase() === profile.label.toLowerCase()
@@ -719,29 +715,8 @@ const payments = {
   usdcAddress: settings.usdcAddress ?? '',
   usdcNetwork: settings.usdcNetwork ?? 'Polygon',
 };
-const stablecoinRows = [
-  ...savedStablecoinProfiles,
-  ...stablecoinDefaults.filter(
-    (fallback) =>
-      !savedStablecoinProfiles.some(
-        (profile) => profile.token === fallback.token && profile.label.toLowerCase() === fallback.label.toLowerCase(),
-      ),
-  ),
-].slice(0, STABLECOIN_FORM_ROWS);
-while (stablecoinRows.length < STABLECOIN_FORM_ROWS) {
-  stablecoinRows.push({
-    id: '',
-    token: 'usdt',
-    label: '',
-    kind: 'evm',
-    enabled: true,
-    receiveAddress: '',
-    endpoint: '',
-    tokenAddress: '',
-    decimals: 6,
-    confirmations: 12,
-  });
-}
+const stablecoinRows = savedStablecoinProfiles.slice(0, STABLECOIN_MAX_ROWS);
+const stablecoinPresetsJson = JSON.stringify(stablecoinNetworkPresets).replace(/</g, '\\u003c');
 // Encrypted key vault (features/secrets). Keys are write-only — stored AES-GCM in
 // D1 under SECRETS_KEK, never echoed back. Needs a KEK; without it the vault is
 // dormant (the store runs demo-only).
@@ -1476,17 +1451,50 @@ const sections = [
             {pmMap.usdc.installed && <MethodToggle method="usdc" enabled={pmMap.usdc.enabled} label="USDC direct" />}
           </div>
         </div>
-        <form method="POST" class="space-y-3 border-t border-gray-100 pt-3">
+        <form
+          method="POST"
+          class="space-y-3 border-t border-gray-100 pt-3"
+          data-stablecoin-form
+          data-stablecoin-next-index={String(stablecoinRows.length)}
+          data-stablecoin-max={String(STABLECOIN_MAX_ROWS)}
+          data-stablecoin-presets={stablecoinPresetsJson}
+        >
           <input type="hidden" name="_action" value="save_direct_wallets" />
           <input type="hidden" name="alipay_payment_url" value={payments.alipayPaymentUrl} />
           <input type="hidden" name="wechatpay_payment_url" value={payments.wechatpayPaymentUrl} />
-          <div class="space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs text-gray-500">
+              Saved receiving addresses. Add one row per buyer-selectable USDC or USDT network.
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" data-stablecoin-add="usdc" class="rounded-md border border-gray-300 px-3 py-2 text-xs font-medium uppercase tracking-wider text-gray-700 hover:bg-gray-50">
+                Add USDC address
+              </button>
+              <button type="button" data-stablecoin-add="usdt" class="rounded-md border border-gray-300 px-3 py-2 text-xs font-medium uppercase tracking-wider text-gray-700 hover:bg-gray-50">
+                Add USDT address
+              </button>
+            </div>
+          </div>
+          <div class="space-y-3" data-stablecoin-list>
             {stablecoinRows.map((profile, index) => {
               const networkOptions = stablecoinNetworkOptionsFor(profile);
               return (
               <div class="space-y-3 rounded-md border border-gray-100 bg-gray-50 p-3" data-stablecoin-row>
                 <input type="hidden" name="stablecoin_row" value={String(index)} />
                 <input type="hidden" name={`stablecoin_id:${index}`} value={profile.id} />
+                <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-3">
+                  <div class="min-w-0">
+                    <p class="text-sm font-medium text-gray-900" data-stablecoin-summary>
+                      {profile.token.toUpperCase()} / {profile.label || 'New network'} / {profile.kind.toUpperCase()}
+                    </p>
+                    <p class="max-w-full truncate font-mono text-xs text-gray-500" data-stablecoin-address-summary>
+                      {profile.receiveAddress || 'No receiving address yet'}
+                    </p>
+                  </div>
+                  <button type="button" data-stablecoin-delete class="rounded-md border border-red-200 px-3 py-2 text-xs font-medium uppercase tracking-wider text-red-700 hover:bg-red-50">
+                    Delete
+                  </button>
+                </div>
                 <div class="grid gap-3 sm:grid-cols-[7rem_11rem_8rem_1fr_5rem]">
                   <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
                     Token
@@ -1524,7 +1532,7 @@ const sections = [
                   </label>
                   <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
                     Receiving address
-                    <input type="text" name={`stablecoin_receive:${index}`} value={profile.receiveAddress} placeholder="0x... / T..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
+                    <input type="text" name={`stablecoin_receive:${index}`} value={profile.receiveAddress} placeholder="0x... / T..." data-stablecoin-receive class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />
                   </label>
                   <label class="flex items-end gap-2 pb-2 text-xs font-medium text-gray-600">
                     <input type="checkbox" name={`stablecoin_enabled:${index}`} value="1" checked={profile.enabled} class="size-4" />
@@ -1554,6 +1562,9 @@ const sections = [
                 </details>
               </div>
             )})}
+          </div>
+          <div data-stablecoin-empty class={stablecoinRows.length ? 'hidden rounded-md border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500' : 'rounded-md border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500'}>
+            No USDC / USDT receiving addresses yet. Add an address above, then save.
           </div>
           <p class="text-xs text-gray-500">
             Each row is one buyer-selectable token/network. Buyers choose USDC or USDT first, then choose one enabled network for that token on the payment page.
@@ -1970,6 +1981,125 @@ const sections = [
     // Stablecoin network presets fill the verification fields while keeping the
     // receiving address editable per row.
     (function () {
+      var form = document.querySelector('[data-stablecoin-form]');
+      if (!form) return;
+      var list = form.querySelector('[data-stablecoin-list]');
+      var empty = form.querySelector('[data-stablecoin-empty]');
+      var maxRows = Number(form.getAttribute('data-stablecoin-max') || '12');
+      var nextIndex = Number(form.getAttribute('data-stablecoin-next-index') || '0');
+      var presets = [];
+      try {
+        presets = JSON.parse(form.getAttribute('data-stablecoin-presets') || '[]');
+      } catch {
+        presets = [];
+      }
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function rowCount() {
+        return form.querySelectorAll('[data-stablecoin-row]').length;
+      }
+
+      function updateEmptyState() {
+        if (empty) empty.classList.toggle('hidden', rowCount() > 0);
+      }
+
+      function optionMarkup(selectedLabel) {
+        return '<option value="">Select network</option>' + presets.map(function (preset) {
+          var selected = preset.label === selectedLabel ? ' selected' : '';
+          return '<option value="' + escapeHtml(preset.label) + '"' + selected +
+            ' data-kind="' + escapeHtml(preset.kind) + '"' +
+            ' data-token="' + escapeHtml(preset.token) + '"' +
+            ' data-endpoint="' + escapeHtml(preset.endpoint) + '"' +
+            ' data-token-address="' + escapeHtml(preset.tokenAddress) + '"' +
+            ' data-decimals="' + escapeHtml(preset.decimals) + '"' +
+            ' data-confirmations="' + escapeHtml(preset.confirmations) + '">' +
+            escapeHtml(preset.label) +
+          '</option>';
+        }).join('');
+      }
+
+      function rowMarkup(row, token) {
+        var preset = presets.find(function (p) { return p.token === token; }) || presets[0] || {};
+        var kind = preset.kind || 'evm';
+        var label = preset.label || '';
+        return '' +
+          '<div class="space-y-3 rounded-md border border-gray-100 bg-gray-50 p-3" data-stablecoin-row>' +
+            '<input type="hidden" name="stablecoin_row" value="' + escapeHtml(row) + '" />' +
+            '<input type="hidden" name="stablecoin_id:' + escapeHtml(row) + '" value="" />' +
+            '<div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-3">' +
+              '<div class="min-w-0">' +
+                '<p class="text-sm font-medium text-gray-900" data-stablecoin-summary>' + escapeHtml(token.toUpperCase() + ' / ' + (label || 'New network') + ' / ' + String(kind).toUpperCase()) + '</p>' +
+                '<p class="max-w-full truncate font-mono text-xs text-gray-500" data-stablecoin-address-summary>No receiving address yet</p>' +
+              '</div>' +
+              '<button type="button" data-stablecoin-delete class="rounded-md border border-red-200 px-3 py-2 text-xs font-medium uppercase tracking-wider text-red-700 hover:bg-red-50">Delete</button>' +
+            '</div>' +
+            '<div class="grid gap-3 sm:grid-cols-[7rem_11rem_8rem_1fr_5rem]">' +
+              '<label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">Token' +
+                '<select name="stablecoin_token:' + escapeHtml(row) + '" data-stablecoin-token class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">' +
+                  '<option value="usdt"' + (token === 'usdt' ? ' selected' : '') + '>USDT</option>' +
+                  '<option value="usdc"' + (token === 'usdc' ? ' selected' : '') + '>USDC</option>' +
+                '</select>' +
+              '</label>' +
+              '<label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">Network' +
+                '<select name="stablecoin_label:' + escapeHtml(row) + '" data-stablecoin-network class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">' +
+                  optionMarkup(label) +
+                '</select>' +
+              '</label>' +
+              '<label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">Chain' +
+                '<select name="stablecoin_kind:' + escapeHtml(row) + '" data-stablecoin-kind class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none">' +
+                  '<option value="evm"' + (kind === 'evm' ? ' selected' : '') + '>EVM</option>' +
+                  '<option value="tron"' + (kind === 'tron' ? ' selected' : '') + '>TRON</option>' +
+                '</select>' +
+              '</label>' +
+              '<label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">Receiving address' +
+                '<input type="text" name="stablecoin_receive:' + escapeHtml(row) + '" value="" placeholder="0x... / T..." data-stablecoin-receive class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />' +
+              '</label>' +
+              '<label class="flex items-end gap-2 pb-2 text-xs font-medium text-gray-600">' +
+                '<input type="checkbox" name="stablecoin_enabled:' + escapeHtml(row) + '" value="1" checked class="size-4" />Enable' +
+              '</label>' +
+            '</div>' +
+            '<details class="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">' +
+              '<summary class="cursor-pointer font-medium text-gray-600">Verification settings</summary>' +
+              '<div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_7rem_7rem]">' +
+                '<label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">RPC / API endpoint' +
+                  '<input type="url" name="stablecoin_endpoint:' + escapeHtml(row) + '" value="' + escapeHtml(preset.endpoint || '') + '" data-stablecoin-endpoint placeholder="https://..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />' +
+                '</label>' +
+                '<label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">Token contract' +
+                  '<input type="text" name="stablecoin_token_address:' + escapeHtml(row) + '" value="' + escapeHtml(preset.tokenAddress || '') + '" data-stablecoin-token-address placeholder="0x... / T..." class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />' +
+                '</label>' +
+                '<label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">Decimals' +
+                  '<input type="number" min="2" max="18" name="stablecoin_decimals:' + escapeHtml(row) + '" value="' + escapeHtml(preset.decimals || 6) + '" data-stablecoin-decimals class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />' +
+                '</label>' +
+                '<label class="flex flex-col gap-1 uppercase tracking-widest text-gray-400">Confirms' +
+                  '<input type="number" min="1" max="200" name="stablecoin_confirmations:' + escapeHtml(row) + '" value="' + escapeHtml(preset.confirmations || 12) + '" data-stablecoin-confirmations class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none" />' +
+                '</label>' +
+              '</div>' +
+            '</details>' +
+          '</div>';
+      }
+
+      function updateSummary(row) {
+        var token = row.querySelector('[data-stablecoin-token]');
+        var network = row.querySelector('[data-stablecoin-network]');
+        var kind = row.querySelector('[data-stablecoin-kind]');
+        var receive = row.querySelector('[data-stablecoin-receive]');
+        var summary = row.querySelector('[data-stablecoin-summary]');
+        var address = row.querySelector('[data-stablecoin-address-summary]');
+        if (summary) {
+          summary.textContent = String(token && token.value ? token.value : 'usdt').toUpperCase() +
+            ' / ' + (network && network.value ? network.value : 'New network') +
+            ' / ' + String(kind && kind.value ? kind.value : 'evm').toUpperCase();
+        }
+        if (address) address.textContent = receive && receive.value ? receive.value : 'No receiving address yet';
+      }
+
       function syncStablecoinRow(row, fillFromNetwork) {
         var token = row.querySelector('[data-stablecoin-token]');
         var network = row.querySelector('[data-stablecoin-network]');
@@ -2002,21 +2132,54 @@ const sections = [
         if (tokenAddress && selected.dataset.tokenAddress) tokenAddress.value = selected.dataset.tokenAddress;
         if (decimals && selected.dataset.decimals) decimals.value = selected.dataset.decimals;
         if (confirmations && selected.dataset.confirmations) confirmations.value = selected.dataset.confirmations;
+        updateSummary(row);
       }
 
       function syncAllStablecoinRows() {
         Array.prototype.forEach.call(document.querySelectorAll('[data-stablecoin-row]'), function (row) {
           syncStablecoinRow(row, false);
+          updateSummary(row);
         });
+        updateEmptyState();
       }
 
-      document.addEventListener('change', function (e) {
+      form.addEventListener('click', function (e) {
+        var target = e.target;
+        if (!target || !target.matches) return;
+        if (target.matches('[data-stablecoin-delete]')) {
+          var existing = target.closest('[data-stablecoin-row]');
+          if (existing) existing.remove();
+          updateEmptyState();
+          return;
+        }
+        if (target.matches('[data-stablecoin-add]')) {
+          if (!list || rowCount() >= maxRows) return;
+          var token = target.getAttribute('data-stablecoin-add') === 'usdc' ? 'usdc' : 'usdt';
+          var rowId = 'new-' + nextIndex;
+          nextIndex += 1;
+          form.setAttribute('data-stablecoin-next-index', String(nextIndex));
+          list.insertAdjacentHTML('beforeend', rowMarkup(rowId, token));
+          var row = list.lastElementChild;
+          if (row) syncStablecoinRow(row, true);
+          updateEmptyState();
+        }
+      });
+
+      form.addEventListener('change', function (e) {
         var target = e.target;
         if (!target || !target.matches) return;
         var row = target.closest('[data-stablecoin-row]');
         if (!row) return;
         if (target.matches('[data-stablecoin-token]')) syncStablecoinRow(row, true);
         if (target.matches('[data-stablecoin-network]')) syncStablecoinRow(row, true);
+        updateSummary(row);
+      });
+
+      form.addEventListener('input', function (e) {
+        var target = e.target;
+        if (!target || !target.matches || !target.matches('[data-stablecoin-receive]')) return;
+        var row = target.closest('[data-stablecoin-row]');
+        if (row) updateSummary(row);
       });
       syncAllStablecoinRows();
     })();
