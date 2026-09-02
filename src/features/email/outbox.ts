@@ -20,6 +20,7 @@ import { orderConfirmationEmail, orderNotificationEmail, orderShippedEmail } fro
 import { guestLinkReissueEmail } from './guestLinkReissue';
 import { guestOrderUrl, getGuestAccess, sweepAbandonedGuestAccess } from '../orders/guestAccess.ts';
 import { shouldSendCustomerOrderEmail } from './orderPolicy';
+import { parseEmailRecipients } from './recipients';
 
 /**
  * Transactional-email outbox (see migration 0032). recordPaidOrder commits one
@@ -118,7 +119,7 @@ export async function deliverOrderNotifications(
         await markFailed(db, orderId, kind, attempts, 'Order row not found', true);
         continue;
       }
-      const notifyTo = s.emailNotifyTo || getConfig().email.notifyTo;
+      const notifyTo = parseEmailRecipients(s.emailNotifyTo || getConfig().email.notifyTo);
       const storeName = s.storeName || getConfig().storeName;
 
       // Guest-link reissue: a stale event — one whose generation no longer
@@ -165,7 +166,7 @@ export async function deliverOrderNotifications(
       const applicable =
         kind === 'customer-receipt'
           ? Boolean(order.email) && shouldSendCustomerOrderEmail(order.payment_method)
-          : Boolean(notifyTo);
+          : notifyTo.length > 0;
       if (!applicable) {
         await markSkipped(db, orderId, kind, attempts);
         continue;
@@ -183,7 +184,7 @@ export async function deliverOrderNotifications(
               // position. The owner notification links to admin instead.
               await guestOrderUrl(db, order.public_id, origin),
             )
-          : orderNotificationEmail(order, items, notifyTo!, origin, storeName, s.imageDelivery);
+          : orderNotificationEmail(order, items, notifyTo, origin, storeName, s.imageDelivery);
       // Keyed on public_id, not the row id: D1 ids restart per store, so two
       // stores sharing one Resend account would both mint customer-receipt/1 —
       // and Resend 409s a reused key with a different payload, walking the

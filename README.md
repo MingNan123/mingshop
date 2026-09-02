@@ -389,7 +389,7 @@ Most settings are **runtime** — changed in **`/admin/settings`**, stored in a 
 - **Features** — cart/checkout, "Buy now", discounts, tax, customer accounts, shipping, and upload optimization.
 - **Images** — original delivery or responsive Cloudflare on-demand transformations.
 - **Payments** — USDC/USDT receiving profiles, enabled networks, verification settings, and related API keys; legacy provider credentials can remain for signed callback compatibility.
-- **Email** — on/off, provider (Resend / Cloudflare), from-address, key, send-test button.
+- **Email** — on/off, provider (Resend / Cloudflare), from-address, notification email list, key, send-test button.
 - **Bot protection** — Turnstile toggle + sitekey + secret.
 - **Search** — keyword (FTS5) vs semantic (Workers AI + Vectorize) + reindex.
 
@@ -469,7 +469,7 @@ hardening for a high-traffic paid deployment.
 
 - **Shipping weight** — set a product's packed weight (and a per-variant override; blank inherits) on the product form. Weights are stored in grams and entered in the store's unit, set in the **Admin → Settings** shipping card — it defaults from the store's time zone (lb for US stores, g elsewhere), and changing it only changes display: stored grams re-render converted. Uncheck **Requires shipping** for digital goods so they are excluded from the shipment weight instead of blocking checkout. An unknown weight is never treated as zero: weight-priced services are withheld and, if nothing else can carry the order, checkout is blocked and the products are named.
 - **Digital delivery** — attach a PDF, ZIP, EPUB, MP3, M4A, or text file (up to 25 MB) on the product form. Checkout snapshots the exact object, so replacing or removing the product file never changes a paid or in-flight buyer's entitlement. Paid order pages expose token-protected downloads; fully refunded orders do not. Deliverables live in the distinct private `FILES` bucket and never in the public image bucket or Media library. Old objects are retained in v1; replacement and product deletion do not delete them.
-- **Email** — configured in **Admin → Settings → Email** (on/off, provider, from-address; the key in the encrypted vault). Unconfigured it's a safe no-op — checkout still succeeds. A **Send test email** button verifies real delivery. Two providers:
+- **Email** — configured in **Admin → Settings → Email** (on/off, provider, from-address, owner notification email list; the key in the encrypted vault). Notification recipients can be added, edited, or deleted from the list. Unconfigured it's a safe no-op — checkout still succeeds. A **Send test email** button verifies real delivery. Two providers:
   - **Resend** (default, **works on the Workers free plan** — a plain HTTPS call): get a free key at [resend.com](https://resend.com), paste it in Settings → Email, and set the from-address (a Resend-verified domain, or `onboarding@resend.dev` to test to your own address).
   - **Cloudflare (Workers Paid plan)**: onboard a sender domain, add the commented `send_email` binding from `wrangler.jsonc`, redeploy, then pick Cloudflare in Settings → Email with a from-address on that domain. The section flags whether the binding is wired.
 

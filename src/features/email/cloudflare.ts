@@ -21,13 +21,16 @@ export function createCloudflareEmail(
 ): EmailProvider {
   return {
     async send(msg: EmailMessage): Promise<void> {
-      await binding.send({
-        to: msg.to,
-        from,
-        subject: msg.subject,
-        html: msg.html,
-        text: msg.text,
-      });
+      const recipients = Array.isArray(msg.to) ? msg.to : [msg.to];
+      for (const to of recipients) {
+        await binding.send({
+          to,
+          from,
+          subject: msg.subject,
+          html: msg.html,
+          text: msg.text,
+        });
+      }
     },
   };
 }

@@ -45,6 +45,11 @@ import {
   type RuntimeCapabilities,
 } from '../../features/settings/availability';
 import { getEmailProvider } from '../../features/email';
+import {
+  normalizeEmailRecipients,
+  parseEmailRecipients,
+  serializeEmailRecipients,
+} from '../../features/email/recipients';
 import { normalizeTimeZone, allTimeZones } from '../../features/settings/timeZone';
 import { WEIGHT_UNITS, isWeightUnit } from '../../features/shipping/weight';
 import { shippingFor } from '../../features/shipping/effective';
@@ -454,14 +459,19 @@ if (Astro.request.method === 'POST') {
     await setSetting(env.DB, 'email_provider', provider === 'cloudflare' ? 'cloudflare' : null);
     await setSetting(env.DB, 'email_from', String(form.get('email_from') ?? '').trim() || null);
     await setSetting(env.DB, 'email_from_name', String(form.get('email_from_name') ?? '').trim() || null);
-    await setSetting(env.DB, 'email_notify_to', String(form.get('email_notify_to') ?? '').trim() || null);
+    const notify = normalizeEmailRecipients(form.getAll('email_notify_to'));
+    if (notify.invalid.length) {
+      validationError = `Fix invalid notification email: ${notify.invalid[0]}`;
+    } else {
+      await setSetting(env.DB, 'email_notify_to', serializeEmailRecipients(notify.recipients) || null);
+    }
     await applySecrets(['resend_api_key']);
     const ready =
       provider === 'cloudflare'
         ? !!env.EMAIL
         : !!(await getSecret(env.DB, 'resend_api_key'));
     await setSetting(env.DB, 'email_enabled', requestedEnabled && ready ? null : '0');
-    if (requestedEnabled && !ready) {
+    if (!validationError && requestedEnabled && !ready) {
       validationError =
         provider === 'cloudflare'
           ? 'Add the EMAIL binding and redeploy before enabling Cloudflare Email.'
@@ -737,7 +747,7 @@ const email = {
   from: settings.emailFrom ?? '',
   fromName: settings.emailFromName ?? '',
   fromPlaceholder: cfg.email.from,
-  notifyTo: settings.emailNotifyTo ?? '',
+  notifyRecipients: parseEmailRecipients(settings.emailNotifyTo || cfg.email.notifyTo),
   notifyPlaceholder: cfg.email.notifyTo || 'you@yourdomain.com',
 };
 const resendStoredInD1 = inD1('resend_api_key');
@@ -1669,17 +1679,44 @@ const sections = [
             class="w-48 rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
           />
         </label>
-        <label class="flex flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
-          New-order alerts to
-          <input
-            type="email"
-            name="email_notify_to"
-            value={email.notifyTo}
-            placeholder={email.notifyPlaceholder}
-            class="w-64 rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
-          />
-          <span class="normal-case tracking-normal text-gray-400">Owner gets a "new order" email here. Blank = off.</span>
-        </label>
+      </div>
+
+      <div class="space-y-2" data-email-recipients>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p class="text-xs uppercase tracking-widest text-gray-400">New-order alert emails</p>
+            <p class="text-xs text-gray-400">Add, edit, or remove owner notification recipients. Blank list = off.</p>
+          </div>
+          <button
+            type="button"
+            data-email-recipient-add
+            class="rounded-md border border-line px-3 py-2 text-xs font-medium uppercase tracking-wider text-gray-700 hover:border-brand hover:text-brand"
+          >
+            Add email
+          </button>
+        </div>
+        <div class="space-y-2" data-email-recipient-list>
+          {
+            (email.notifyRecipients.length ? email.notifyRecipients : ['']).map((recipient) => (
+              <div class="flex flex-wrap items-center gap-2" data-email-recipient-row>
+                <input
+                  type="email"
+                  name="email_notify_to"
+                  value={recipient}
+                  placeholder={email.notifyPlaceholder}
+                  class="w-72 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+                />
+                <button
+                  type="button"
+                  data-email-recipient-remove
+                  class="rounded-md border border-line px-3 py-2 text-xs font-medium uppercase tracking-wider text-gray-700 hover:border-red-400 hover:text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            ))
+          }
+        </div>
       </div>
 
       {/* Resend API key — shown only for the Resend provider. JS toggles it live as
@@ -1718,6 +1755,7 @@ const sections = [
         type="email"
         name="test_to"
         required
+        value={email.notifyRecipients[0] ?? ''}
         placeholder="you@example.com"
         class="w-60 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand focus:outline-none"
       />
@@ -2300,6 +2338,40 @@ const sections = [
       document.addEventListener('change', function (e) {
         var t = e.target;
         if (t && t.matches && t.matches('[data-email-provider]')) syncProvider(t);
+      });
+      function emptyRecipientRow(section) {
+        var row = section.querySelector('[data-email-recipient-row]');
+        if (!row) return null;
+        var clone = row.cloneNode(true);
+        var input = clone.querySelector('input[name="email_notify_to"]');
+        if (input) input.value = '';
+        return clone;
+      }
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.matches) return;
+        if (t.matches('[data-email-recipient-add]')) {
+          var section = t.closest('[data-email-recipients]');
+          var list = section && section.querySelector('[data-email-recipient-list]');
+          var row = section && emptyRecipientRow(section);
+          if (list && row) {
+            list.appendChild(row);
+            var input = row.querySelector('input[name="email_notify_to"]');
+            if (input) input.focus();
+          }
+        }
+        if (t.matches('[data-email-recipient-remove]')) {
+          var current = t.closest('[data-email-recipient-row]');
+          var list = current && current.parentElement;
+          var section = t.closest('[data-email-recipients]');
+          if (!current || !list || !section) return;
+          if (list.querySelectorAll('[data-email-recipient-row]').length <= 1) {
+            var input = current.querySelector('input[name="email_notify_to"]');
+            if (input) input.value = '';
+            return;
+          }
+          current.remove();
+        }
       });
 
       if (!window.fetch) return;

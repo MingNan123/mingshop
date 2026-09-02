@@ -23,7 +23,7 @@ export function createResendEmail(
         },
         body: JSON.stringify({
           from: fromHeader,
-          to: [msg.to],
+          to: Array.isArray(msg.to) ? msg.to : [msg.to],
           subject: msg.subject,
           html: msg.html,
           text: msg.text,

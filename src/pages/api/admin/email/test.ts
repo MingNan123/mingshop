@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getEmailProvider } from '../../../../features/email';
+import { isValidEmailAddress } from '../../../../features/email/recipients';
 import { getStoreSettings } from '../../../../features/settings/db';
 import { env } from 'cloudflare:workers';
 
@@ -21,7 +22,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
         })
       : redirect(`/admin/settings?msg=${encodeURIComponent(message)}#email`, 303);
 
-  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+  if (!to || !isValidEmailAddress(to)) {
     return done(false, 'Enter a valid recipient address for the test email.');
   }
   const provider = await getEmailProvider();

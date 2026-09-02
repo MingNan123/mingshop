@@ -134,7 +134,7 @@ export function orderConfirmationEmail(
 export function orderNotificationEmail(
   order: Order,
   items: OrderItemWithImage[],
-  to: string,
+  to: string | string[],
   baseUrl: string,
   storeName: string,
   imageDelivery: ImageDelivery = 'original',

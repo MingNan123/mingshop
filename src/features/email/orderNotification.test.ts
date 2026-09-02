@@ -67,4 +67,16 @@ describe('orderNotificationEmail', () => {
     expect(message.text).toContain('Public ID: —');
     expect(message.html).not.toContain('null');
   });
+
+  it('supports multiple owner recipients', () => {
+    const message = orderNotificationEmail(
+      order(),
+      [],
+      ['owner@example.com', 'ops@example.com'],
+      'https://demo.minshop.dev',
+      'Minshop',
+    );
+
+    expect(message.to).toEqual(['owner@example.com', 'ops@example.com']);
+  });
 });
