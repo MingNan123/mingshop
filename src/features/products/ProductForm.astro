@@ -13,6 +13,8 @@ const priceDecimals = currencyDecimals(defaultCurrency);
 const price = product ? toMajorUnits(product.price_cents, product.currency).toFixed(currencyDecimals(product.currency)) : '';
 const priceStep = priceDecimals > 0 ? (10 ** -priceDecimals).toFixed(priceDecimals) : '1';
 const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:border-brand focus:outline-none';
+const stablecoinAvailable = defaultCurrency.toLowerCase() === 'usd';
+const stablecoinAmount = stablecoinAvailable && price ? `${price} USDC / ${price} USDT` : null;
 ---
 
 <form method="POST" action={action} enctype="multipart/form-data" id={formId} class="max-w-4xl space-y-6">
@@ -30,9 +32,9 @@ const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:bo
       </section>
 
       <section id="pricing" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
-        <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">这里设置商品的固定基础价格。Stripe、Waffo、Lightning、支付宝、微信支付、USDC、USDT 等所有支付方式都会从后台重新读取此价格；规格、附加项和运费在此基础上计算，买家不能在结账时修改金额。</p></div>
+        <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">这里设置商品的固定基础价格。USDC / USDT 会与此后台价格绑定；规格、附加项和运费在此基础上由服务器计算，买家不能在结账时修改金额。</p></div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div><label class="block text-sm font-medium" for="price">固定价格（{defaultCurrency.toUpperCase()}）</label><input id="price" name="price" type="number" step={priceStep} min="0" required value={price} class={inputClass} /><p class="mt-1 text-xs text-gray-500">保存后作为所有支付渠道的统一基础金额。</p></div>
+          <div><label class="block text-sm font-medium" for="price">固定价格（{defaultCurrency.toUpperCase()}）</label><input id="price" name="price" type="number" step={priceStep} min="0" required value={price} data-stablecoin-price data-decimals={priceDecimals} data-stablecoin={stablecoinAvailable ? 'true' : 'false'} class={inputClass} /><p class="mt-1 text-xs text-gray-500">保存后作为 USDC / USDT 的统一固定收款金额。</p>{stablecoinAvailable && <p data-stablecoin-binding class:list={['mt-2 rounded-md border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-gray-600', !stablecoinAmount && 'hidden']}>当前绑定金额：<strong data-stablecoin-amount>{stablecoinAmount}</strong></p>}</div>
           <div><label class="block text-sm font-medium" for="stock">库存</label><input id="stock" name="stock" type="number" step="1" min="0" value={product?.stock ?? 0} class={inputClass} /></div>
         </div>
       </section>
@@ -63,3 +65,24 @@ const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:bo
     </aside>
   </div>
 </form>
+<script is:inline>
+  const priceInput = document.querySelector('[data-stablecoin-price]');
+  const binding = document.querySelector('[data-stablecoin-binding]');
+  const amount = document.querySelector('[data-stablecoin-amount]');
+  if (priceInput?.dataset.stablecoin === 'true' && binding && amount) {
+    const decimals = Number(priceInput.dataset.decimals || '2');
+    const update = () => {
+      const value = Number(priceInput.value);
+      if (!Number.isFinite(value) || value < 0 || priceInput.value.trim() === '') {
+        binding.classList.add('hidden');
+        amount.textContent = '';
+        return;
+      }
+      const fixed = value.toFixed(decimals);
+      amount.textContent = `${fixed} USDC / ${fixed} USDT`;
+      binding.classList.remove('hidden');
+    };
+    priceInput.addEventListener('input', update);
+    update();
+  }
+</script>

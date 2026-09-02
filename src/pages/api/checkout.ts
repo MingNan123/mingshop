@@ -42,6 +42,7 @@ import { purgeStockProductCache } from '../../features/cache/purge';
 import { lifecycleActive } from '../../features/digitalDelivery/rollout.ts';
 import { mintLightningOrder } from '../../features/payments/lightning-provider';
 import { getLightningBackend } from '../../features/payments/lightning';
+import { clientControlledPriceFields } from '../../features/payments/checkout/priceGuard.ts';
 
 export const prerender = false;
 
@@ -458,6 +459,15 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     return cjson({ error: 'Body must be { "items": [{ "product_id": "prod_…", "quantity": number }] }.' }, 400);
   }
+  const rootPriceFields = clientControlledPriceFields(body);
+  if (rootPriceFields.length > 0) {
+    return cjson(
+      {
+        error: `Checkout prices are server-controlled. Remove these fields: ${rootPriceFields.join(', ')}.`,
+      },
+      400,
+    );
+  }
   if (rawItems.length > MAX_CHECKOUT_LINES) {
     return cjson({ error: `A checkout can contain at most ${MAX_CHECKOUT_LINES} lines.` }, 400);
   }
@@ -503,6 +513,15 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
     if (r.extras !== undefined) {
       return cjson(
         { error: 'The numeric "extras" array is no longer accepted; pass "extra_ids": ["xtra_…"].' },
+        400,
+      );
+    }
+    const itemPriceFields = clientControlledPriceFields(r);
+    if (itemPriceFields.length > 0) {
+      return cjson(
+        {
+          error: `Checkout item prices are locked to the shop catalog. Remove these fields: ${itemPriceFields.join(', ')}.`,
+        },
         400,
       );
     }

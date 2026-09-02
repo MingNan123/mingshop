@@ -653,7 +653,7 @@ Each product is self-describing — `id` is the prefixed public ID (`prod_…`; 
   "url": "https://…/products/merino-wool-beanie" }
 ```
 
-`POST /api/checkout` recalculates price and stock from D1. Item selectors are the catalog's public IDs: `product_id` (`prod_…`) is canonical, with `slug` accepted as a documented convenience; `variant_id` (`var_…`) and `extra_ids` (`["xtra_…"]`) come from the product detail route. **Numeric IDs are rejected with 400** (including the legacy numeric `extras` array). Set `method` to one of the values returned by `GET /api/checkout`; omitting it uses the default. USDC/USDT return a stablecoin payment flow with a browser/QR fallback in `checkout_url`:
+`POST /api/checkout` recalculates price and stock from D1. Item selectors are the catalog's public IDs: `product_id` (`prod_…`) is canonical, with `slug` accepted as a documented convenience; `variant_id` (`var_…`) and `extra_ids` (`["xtra_…"]`) come from the product detail route. **Numeric IDs are rejected with 400** (including the legacy numeric `extras` array), and client-supplied `price`, `amount`, `total`, or `currency` fields are rejected because payable amounts are locked to the shop's saved product/option/shipping prices. Set `method` to one of the values returned by `GET /api/checkout`; omitting it uses the default. USDC/USDT return a stablecoin payment flow with a browser/QR fallback in `checkout_url`:
 
 ```json
 {
