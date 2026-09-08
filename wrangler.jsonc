@@ -25,6 +25,10 @@
 		{
 			"pattern": "mingshop123.com",
 			"custom_domain": true
+		},
+		{
+			"pattern": "one.mingshop123.com",
+			"custom_domain": true
 		}
 	],
 	"vars": {
