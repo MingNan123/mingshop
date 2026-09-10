@@ -1,100 +1,53 @@
 ---
 import type { CatalogPageModel } from '../../features/storefront/models';
 import ProductCard from './ProductCard.astro';
+import StoreImage from '../../features/storefront/controls/StoreImage.astro';
 import CatalogSort from '../../features/storefront/controls/CatalogSort.astro';
 import CatalogPagination from '../../features/storefront/controls/CatalogPagination.astro';
-
 interface Props { model: CatalogPageModel; }
 const { model } = Astro.props;
-const chip = 'market-chip rounded-full border border-line bg-white px-4 py-2 text-[12px] font-medium text-[color:var(--market-muted)] transition';
-const categoryIcon = (slug: string) => {
-  if (slug.includes('saas')) return '✦';
-  if (slug.includes('ai')) return '✧';
-  if (slug.includes('template')) return '⌘';
-  if (slug.includes('ui')) return '◫';
-  if (slug.includes('resource') || slug.includes('digital')) return '▱';
-  if (slug.includes('course') || slug.includes('tutorial') || slug.includes('learn')) return '↗';
-  return '•';
-};
+const featured = model.pagination.page === 1 ? model.products[0] : undefined;
+const gridProducts = featured ? model.products.slice(1) : model.products;
 ---
-
-<section class="overflow-hidden">
-  <div class="relative -mx-4 mb-12 overflow-hidden bg-[color:var(--color-ink)] px-6 py-24 text-center text-white sm:-mx-6 sm:px-10 sm:py-32 lg:-mx-8 lg:py-40">
-    <div class="market-orb market-orb-one"></div>
-    <div class="market-orb market-orb-two"></div>
-    <div class="relative z-10 mx-auto max-w-5xl market-reveal">
-      <p class="mb-5 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/55">{model.eyebrow}</p>
-      <h1 class="text-5xl font-semibold tracking-[-0.065em] sm:text-7xl lg:text-[7rem] lg:leading-[0.88]">{model.heading}</h1>
-      <p class="mx-auto mt-8 max-w-2xl text-base leading-7 text-white/68 sm:text-lg">AI SaaS、AI 工具、网站模板、UI 素材、数字资料与一次性学习教程。挑选真正值得留下的数字产品。</p>
-      <a href="#products" class="market-cta mt-9 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[13px] font-semibold text-[color:var(--color-ink)] transition hover:bg-white/90">
-        探索产品 <span aria-hidden="true">↓</span>
-      </a>
-    </div>
+<section class="market-catalog">
+  <div class="market-intro">
+    <p class="market-eyebrow">MINGSHOP · 数字好物</p>
+    <h1>{model.heading}</h1>
+    <p class="market-intro-copy">精选软件、模板与数字资源。<br />从一个好想法，到下一件好作品。</p>
+    <a class="market-button" href="#products">探索全部产品 <span aria-hidden="true">↓</span></a>
   </div>
-
-  <div class="mb-12 grid gap-3 sm:grid-cols-3">
-    <div class="market-feature market-reveal rounded-[24px] bg-[color:var(--market-surface)] p-6" style="animation-delay:80ms">
-      <span class="text-xl">✦</span><h2 class="mt-4 text-lg font-semibold tracking-[-0.02em]">AI SaaS</h2><p class="mt-2 text-[13px] leading-6 text-[color:var(--market-muted)]">持续更新的在线效率工具。</p>
-    </div>
-    <div class="market-feature market-reveal rounded-[24px] bg-[color:var(--market-surface)] p-6" style="animation-delay:140ms">
-      <span class="text-xl">⌘</span><h2 class="mt-4 text-lg font-semibold tracking-[-0.02em]">模板与素材</h2><p class="mt-2 text-[13px] leading-6 text-[color:var(--market-muted)]">拿来即用的网站与 UI 资源。</p>
-    </div>
-    <div class="market-feature market-reveal rounded-[24px] bg-[color:var(--market-surface)] p-6" style="animation-delay:200ms">
-      <span class="text-xl">↗</span><h2 class="mt-4 text-lg font-semibold tracking-[-0.02em]">知识产品</h2><p class="mt-2 text-[13px] leading-6 text-[color:var(--market-muted)]">一次购买，长期学习与使用。</p>
-    </div>
-  </div>
-
-  <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-    <nav aria-label="商品分类" class="market-category-nav flex min-w-0 flex-wrap gap-2 overflow-x-auto pb-1">
-      <a href={model.allHref ?? '/'} class={`${chip} border-[color:var(--color-ink)] bg-[color:var(--color-ink)] text-white`}>
-        全部商品
+  {featured && model.pagination.page === 1 && (
+    <section class="market-spotlight" aria-label="产品聚焦">
+      <div class="market-spotlight-copy">
+        <p class="market-eyebrow">产品聚焦</p>
+        <h2>{featured.name}</h2>
+        <p class="market-spotlight-description">{featured.description}</p>
+        <p class="market-spotlight-price">{featured.formattedPrice}{featured.billingInterval === 'month' ? ' / 月' : featured.billingInterval === 'year' ? ' / 年' : ''}</p>
+        <a class="market-button" href={featured.href}>进一步了解 <span aria-hidden="true">↗</span></a>
+      </div>
+      <a class="market-spotlight-media" href={featured.href} aria-label={`查看 ${featured.name}`}>
+        <StoreImage image={{ ...featured.image, priority: true, sizes: '(min-width: 900px) 600px, 90vw' }} class="market-spotlight-image" />
       </a>
-      {model.categories.map((category) => (
-        <a href={category.href} class={chip}>
-          <span class="mr-1.5 opacity-60" aria-hidden="true">{categoryIcon(category.href)}</span>{category.text}
-        </a>
-      ))}
+    </section>
+  )}
+  <div id="products" class="market-catalog-heading">
+    <div><p class="market-eyebrow">{model.eyebrow}</p><h2>找到你的下一件好工具。</h2></div>
+    <p>本页 {model.products.length} 件产品</p>
+  </div>
+  <div class="market-catalog-toolbar">
+    <nav aria-label="商品分类" class="market-category-nav">
+      <a class="market-category-link" href={model.allHref ?? '/products'}>全部商品</a>
+      {model.categories.map((category) => <a class="market-category-link" href={category.href}>{category.text}</a>)}
     </nav>
-    <CatalogSort
-      model={model.sort}
-      class="ml-auto flex shrink-0 items-center gap-3 rounded-full bg-[color:var(--market-surface)] px-4 py-2 text-[11px] font-semibold text-[color:var(--market-muted)]"
-    />
+    <CatalogSort model={model.sort} class="market-sort" />
   </div>
-
-  <div id="products" class="mb-6 flex items-end justify-between gap-4">
-    <div>
-      <p class="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--market-muted)]">精选数字产品</p>
-      <h2 class="text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">为你挑选的工具</h2>
-    </div>
-    <p class="hidden text-[13px] text-[color:var(--market-muted)] sm:block">
-      {model.products.length} 个产品{model.pagination.totalPages > 1 && ` · ${model.pagination.page}/${model.pagination.totalPages}`}
-    </p>
+  {model.products.length === 0 && <p role="status" class="market-empty">暂时没有可购买的产品。可以看看其他分类。</p>}
+  {gridProducts.length > 0 && <ul class="market-product-grid">{gridProducts.map((card, index) => <ProductCard card={card} index={index} headingLevel="h3" />)}</ul>}
+  <CatalogPagination model={model.pagination} class="mt-10 flex flex-wrap items-center justify-center gap-2 text-sm" />
+  <div class="market-closing">
+    <p class="market-eyebrow">为创作，留出更多空间。</p>
+    <h2>少一点繁琐。<br /><span>多一点可能。</span></h2>
+    <p>浏览适合你的数字产品，按自己的节奏开始。</p>
+    <a href="#products">继续探索 <span aria-hidden="true">›</span></a>
   </div>
-
-  {model.products.length === 0 && (
-    <p role="status" class="rounded-3xl bg-[color:var(--market-surface)] p-10 text-center text-sm text-[color:var(--market-muted)]">暂时没有可购买的产品。</p>
-  )}
-
-  {model.products.length > 0 && (
-    <ul class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      {model.products.map((card, i) => <ProductCard card={card} index={i} />)}
-    </ul>
-  )}
-
-  <CatalogPagination model={model.pagination} class="mt-10 flex items-center justify-center gap-2 text-[13px] font-medium" />
-
-  <script>
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!reduceMotion && 'IntersectionObserver' in window) {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('market-visible');
-            observer.unobserve(entry.target);
-          }
-        });
-      }, { threshold: 0.08, rootMargin: '0px 0px -40px' });
-      document.querySelectorAll('.market-feature, .market-product-reveal').forEach((el) => observer.observe(el));
-    }
-  </script>
 </section>
