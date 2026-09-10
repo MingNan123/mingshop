@@ -28,11 +28,11 @@ const link = 'text-[13px] font-medium text-[color:var(--market-muted)] transitio
       )}
     </a>
 
-    <nav aria-label="Store" class="hidden min-w-0 flex-1 items-center justify-center lg:flex">
+    <nav aria-label="Store" class="min-w-0 flex-1 items-center justify-center">
       <StoreNav
         links={model.headerLinks}
-        class="flex items-center gap-7 text-[13px]"
-        disclosureClass="hidden"
+        class="hidden min-w-0 items-center justify-center gap-6 text-[12px] xl:flex"
+        disclosureClass="relative flex justify-end text-sm xl:hidden"
       />
     </nav>
 
