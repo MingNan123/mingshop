@@ -255,7 +255,7 @@ export function createAlipayProvider(
       const order = pendingToPaidOrder(pending);
       return {
         type: `alipay.${tradeStatus}`,
-        settlePendingPaymentId: String(pending.id),
+        settlePendingPaymentId: outTradeNo,
         order: {
           ...order,
           providerPaymentId: form.get('trade_no') ?? null,
