@@ -44,6 +44,14 @@ const link = 'text-[13px] font-medium text-[color:var(--market-muted)] transitio
         inputClass="w-full bg-transparent text-[13px] focus:outline-none"
       />
       {model.account.enabled && <StoreAccountControl href={model.account.href} class={link} />}
+      <a
+        href="mailto:support@mingshop123.com"
+        class={`${link} hidden whitespace-nowrap sm:inline-flex`}
+        aria-label="客服邮箱 support@mingshop123.com"
+        title="support@mingshop123.com"
+      >
+        客服邮箱
+      </a>
       {model.cart.enabled && (
         <StoreCartControl
           href={model.cart.href}
