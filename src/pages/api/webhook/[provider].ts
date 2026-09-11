@@ -19,7 +19,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     return new Response('Unknown payment webhook', { status: 404 });
   }
 
-  // Waffo signature verification depends on the exact raw request body.
+  // Signature verification depends on the exact raw request body.
   const payload = await request.text();
   const origin = new URL(request.url).origin;
 
@@ -28,9 +28,13 @@ export const POST: APIRoute = async ({ request, params }) => {
     const provider = await getPaymentProvider(method);
     result = await provider.verifyWebhook(payload, request.headers);
   } catch (err) {
-    return new Response(`Webhook verification failed: ${(err as Error).message}`, { status: 400 });
+    // Alipay retries notifications unless it receives the literal success body.
+    return new Response(
+      method === 'alipay' ? 'failure' : `Webhook verification failed: ${(err as Error).message}`,
+      { status: 400 },
+    );
   }
 
   await recordPaidWebhookOrder(result, origin, method, settings);
-  return new Response('ok', { status: 200 });
+  return new Response(method === 'alipay' ? 'success' : 'ok', { status: 200 });
 };
