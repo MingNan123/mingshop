@@ -9,6 +9,7 @@ import { getLightningBackend } from './lightning';
 import { createOpenNodeProvider } from './opennode';
 import { createWaffoProvider, isWaffoConfigured } from './waffo';
 import { createManualWalletProvider } from './manual-wallet';
+import { createAlipayProvider, type AlipayMode } from './alipay';
 import { getSecret, vaultReady } from '../secrets/store';
 
 export type { PaymentProvider } from './provider';
@@ -19,6 +20,7 @@ export {
   RESERVATION_EXPIRY_GRACE_SECONDS,
 } from './provider';
 export { MANUAL_WALLET_CHECKOUT_TTL_SECONDS } from './manual-wallet';
+export { ALIPAY_CHECKOUT_TTL_SECONDS } from './alipay';
 export const DEMO_CHECKOUT_TTL_SECONDS = 0;
 
 export type PaymentMethod =
@@ -28,17 +30,30 @@ export interface ActivePaymentMethodList extends Array<ActivePaymentMethod> {
   includes(searchElement: PaymentMethod, fromIndex?: number): boolean;
 }
 
-// New sales deliberately expose only stablecoins. Legacy provider code remains
-// below so historical webhooks/orders are still readable and serviceable.
-const ALL_METHODS: ActivePaymentMethod[] = ['usdt', 'usdc'];
-const OFFERED: ActivePaymentMethod[] = ['usdt', 'usdc'];
-const WEBHOOK_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
+// Alipay is re-enabled for new sales alongside the existing stablecoin rails.
+// Other legacy providers remain serviceable for historical webhooks/orders.
+const ALL_METHODS: ActivePaymentMethod[] = ['alipay', 'usdt', 'usdc'];
+const OFFERED: ActivePaymentMethod[] = ['alipay', 'usdt', 'usdc'];
+const WEBHOOK_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode', 'alipay'];
+
+function alipayMode(): AlipayMode {
+  return env.ALIPAY_MODE === 'production' ? 'production' : 'sandbox';
+}
+
+function alipayConfigured(): boolean {
+  if (!env.ALIPAY_APP_ID || !env.ALIPAY_PRIVATE_KEY || !env.ALIPAY_PUBLIC_KEY) return false;
+  if (alipayMode() === 'sandbox' && !env.ALIPAY_GATEWAY_URL) return false;
+  // Domestic Computer Website Payment is RMB-denominated in production.
+  if (alipayMode() === 'production' && getConfig().currency.toLowerCase() !== 'cny') return false;
+  return true;
+}
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
   return ['stripe','waffo','lightning','opennode','alipay','wechatpay','usdc','usdt','demo'].includes(value);
 }
 
 export function isMethodAvailable(method: PaymentMethod, settings: StoreSettings, _vault = vaultReady()): boolean {
+  if (method === 'alipay') return alipayConfigured();
   const usdStore = getConfig().currency.toLowerCase() === 'usd';
   if (!usdStore) return false;
   if (method === 'usdc') return settings.usdcAutoVerifyReady;
@@ -85,7 +100,17 @@ export async function getPaymentProvider(method?: PaymentMethod): Promise<Paymen
       if (!key) throw new Error('OpenNode is not configured.');
       return createOpenNodeProvider(env.DB, key, settings.opennodeApiUrl ?? undefined);
     }
-    case 'alipay': case 'wechatpay':
+    case 'alipay': {
+      if (!alipayConfigured()) throw new Error('Alipay is not fully configured.');
+      return createAlipayProvider(env.DB, {
+        appId: env.ALIPAY_APP_ID!,
+        privateKey: env.ALIPAY_PRIVATE_KEY!,
+        alipayPublicKey: env.ALIPAY_PUBLIC_KEY!,
+        mode: alipayMode(),
+        gatewayUrl: env.ALIPAY_GATEWAY_URL,
+      });
+    }
+    case 'wechatpay':
       throw new Error(`${m} is no longer accepted for new checkout.`);
     case 'usdc': case 'usdt':
       if (!isMethodAvailable(m, settings)) throw new Error(`${m} is not configured.`);
