@@ -55,6 +55,17 @@ declare namespace Cloudflare {
     /** Tax category configured for that Waffo product. */
     WAFFO_TAX_CATEGORY?: string;
 
+    /** Alipay Open Platform app id (sandbox app id in developer mode). */
+    ALIPAY_APP_ID?: string;
+    /** PKCS#8 RSA application private key. Store as a Worker secret. */
+    ALIPAY_PRIVATE_KEY?: string;
+    /** Alipay RSA public key used to verify asynchronous notifications. */
+    ALIPAY_PUBLIC_KEY?: string;
+    /** sandbox (default) or production. */
+    ALIPAY_MODE?: string;
+    /** Current sandbox gateway URL from Alipay Open Platform; optional in production. */
+    ALIPAY_GATEWAY_URL?: string;
+
     AUTH_SECRET?: string;
     CACHE_PURGE_SECRET?: string;
     SECRETS_KEK?: string;
