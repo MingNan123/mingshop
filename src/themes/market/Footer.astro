@@ -4,8 +4,8 @@ import type { StorefrontShellModel } from '../../features/storefront/models';
 /**
  * Market — a compact footer strip.
  *
- * Utility links, not a sitemap. Kept to one line at desktop so it reads as the
- * end of a tool rather than a second navigation surface.
+ * Utility links, not a sitemap. Kept compact while exposing a clear support
+ * contact so customers can always reach the store from any storefront page.
  */
 interface Props {
   model: StorefrontShellModel;
@@ -19,6 +19,16 @@ const { model } = Astro.props;
     class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-4 text-[11px] font-semibold text-[color:var(--market-muted)]"
   >
     <span class="font-serif uppercase tracking-wide text-gray-900">&copy; {model.storeName}</span>
+
+    <a
+      href="mailto:support@mingshop123.com"
+      class="inline-flex items-center gap-1.5 text-[color:var(--market-muted)] transition-colors hover:text-gray-900"
+      aria-label="联系客服：support@mingshop123.com"
+    >
+      <span>客服邮箱：</span>
+      <span class="underline underline-offset-2">support@mingshop123.com</span>
+    </a>
+
     {
       model.footerLinks.length > 0 && (
         <nav aria-label="Footer" class="flex flex-wrap items-center gap-x-5 gap-y-2">
