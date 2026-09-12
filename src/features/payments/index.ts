@@ -38,6 +38,10 @@ export function isPaymentMethod(value: string): value is PaymentMethod {
   return ['stripe','waffo','lightning','opennode','alipay','wechatpay','usdc','usdt','demo'].includes(value);
 }
 
+export function isNewCheckoutPaymentMethod(value: string): value is ActivePaymentMethod {
+  return (ALL_METHODS as string[]).includes(value);
+}
+
 export function isMethodAvailable(method: PaymentMethod, settings: StoreSettings, _vault = vaultReady()): boolean {
   const usdStore = getConfig().currency.toLowerCase() === 'usd';
   if (!usdStore) return false;

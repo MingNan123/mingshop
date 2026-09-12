@@ -20,6 +20,7 @@ import {
   enabledMethods,
   defaultMethod,
   isMethodAvailable,
+  isNewCheckoutPaymentMethod,
   type PaymentMethod,
   STRIPE_CHECKOUT_TTL_SECONDS,
   WAFFO_CHECKOUT_TTL_SECONDS,
@@ -213,12 +214,13 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     return redirect(`${errorPath}?error=${encodeURIComponent(msg)}`, 303);
   }
 
-  // New browser checkouts accept stablecoins only. Reject crafted posts for any
-  // retired rail instead of silently substituting the first available method.
+  // Reject crafted posts for retired rails instead of silently substituting the
+  // first available method. Keep this derived from the active provider registry
+  // so a newly enabled hosted rail cannot be blocked by stale route policy.
   const requestedRaw = String(form.get('method') ?? '').trim();
   const requested = requestedRaw as PaymentMethod;
   const settings = await getStoreSettings(env.DB);
-  if (requestedRaw && requestedRaw !== 'usdc' && requestedRaw !== 'usdt') {
+  if (requestedRaw && !isNewCheckoutPaymentMethod(requestedRaw)) {
     return redirect('/payment-setup', 303);
   }
   if (requestedRaw && !isMethodAvailable(requested, settings)) {

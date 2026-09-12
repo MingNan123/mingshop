@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { enabledMethods, offeredMethods, isMethodAvailable, isWebhookPaymentMethod, webhookMethods } from './index';
+import {
+  enabledMethods,
+  offeredMethods,
+  isMethodAvailable,
+  isNewCheckoutPaymentMethod,
+  isWebhookPaymentMethod,
+  webhookMethods,
+} from './index';
 import { parseStoreSettings } from '../settings/db';
 
 const usdcProfile = {
@@ -33,6 +40,15 @@ describe('payment methods', () => {
     expect(isMethodAvailable('alipay', settings)).toBe(false);
     expect(isMethodAvailable('wechatpay', settings)).toBe(false);
     expect(isMethodAvailable('stripe', settings)).toBe(false);
+  });
+
+  it('allows every active rail through browser checkout and rejects retired rails', () => {
+    for (const method of ['waffo', 'usdt', 'usdc']) {
+      expect(isNewCheckoutPaymentMethod(method)).toBe(true);
+    }
+    for (const method of ['stripe', 'lightning', 'opennode', 'alipay', 'wechatpay', 'demo', 'unknown']) {
+      expect(isNewCheckoutPaymentMethod(method)).toBe(false);
+    }
   });
 
   it('keeps all signed webhook rails routable', () => {
