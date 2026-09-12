@@ -13,6 +13,10 @@ interface Props {
 }
 
 const { model } = Astro.props;
+const legalLinks = [
+  { href: '/privacy-policy', text: '隐私政策' },
+  { href: '/terms-of-service', text: '服务条款' },
+];
 ---
 
 <footer class="border-t border-line">
@@ -20,6 +24,13 @@ const { model } = Astro.props;
     class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-10 text-xs uppercase tracking-widest text-muted"
   >
     <span>&copy; {model.storeName}</span>
+    <nav aria-label="Legal" class="flex flex-wrap items-center gap-x-6 gap-y-3">
+      {legalLinks.map((link) => (
+        <a href={link.href} class="hover:text-brand">
+          {link.text}
+        </a>
+      ))}
+    </nav>
     {
       model.footerLinks.length > 0 && (
         <nav aria-label="Footer" class="flex flex-wrap items-center gap-x-6 gap-y-3">
