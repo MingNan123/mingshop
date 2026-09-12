@@ -17,10 +17,10 @@ const usdtProfile = {
   decimals: 6, confirmations: 12,
 };
 
-describe('stablecoin-only payment methods', () => {
-  it('offers only USDT and USDC setup entries', () => {
+describe('payment methods', () => {
+  it('offers Waffo and the direct stablecoin setup entries', () => {
     const settings = parseStoreSettings([]);
-    expect(offeredMethods(settings)).toEqual(['usdt', 'usdc']);
+    expect(offeredMethods(settings)).toEqual(['waffo', 'usdt', 'usdc']);
   });
 
   it('does not accept legacy payment rails even when their old settings still exist', () => {
@@ -35,7 +35,7 @@ describe('stablecoin-only payment methods', () => {
     expect(isMethodAvailable('stripe', settings)).toBe(false);
   });
 
-  it('keeps legacy signed webhook rails available outside new checkout methods', () => {
+  it('keeps all signed webhook rails routable', () => {
     expect(webhookMethods()).toEqual(['stripe', 'waffo', 'lightning', 'opennode']);
     for (const method of ['stripe', 'waffo', 'lightning', 'opennode']) {
       expect(isWebhookPaymentMethod(method)).toBe(true);
