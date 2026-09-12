@@ -68,5 +68,6 @@ describe('parseStoreSettings — stablecoin checkout policy', () => {
     expect(parseStoreSettings([{ key: 'payment_provider', value: 'stripe' }]).paymentProvider).toBe('usdt');
     expect(parseStoreSettings([{ key: 'payment_provider', value: 'usdt' }]).paymentProvider).toBe('usdt');
     expect(parseStoreSettings([{ key: 'payment_provider', value: 'usdc' }]).paymentProvider).toBe('usdc');
+    expect(parseStoreSettings([{ key: 'payment_provider', value: 'waffo' }]).paymentProvider).toBe('waffo');
   });
 });
