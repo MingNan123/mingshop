@@ -15,7 +15,12 @@ import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
 import { getLightningBackend } from '../features/payments/lightning';
 import { mintLightningOrder } from '../features/payments/lightning-provider';
-import { isMethodAvailable, getPaymentProvider } from '../features/payments';
+import {
+  isMethodAvailable,
+  getPaymentProvider,
+  WAFFO_CHECKOUT_TTL_SECONDS,
+  RESERVATION_EXPIRY_GRACE_SECONDS,
+} from '../features/payments';
 import { MANUAL_WALLET_CHECKOUT_TTL_SECONDS } from '../features/payments/manual-wallet';
 import { reserveInventory, releaseInventoryReservation } from '../features/orders/reservations';
 import { reservationItems } from '../features/orders/reservationItems.ts';
@@ -28,7 +33,7 @@ const fld = (name: string) => (form?.get(name) ?? '').toString().trim();
 
 // Rails that need the shop's own address/shipping step. Their charge amount is
 // rebuilt here from the current D1 product/variant/extra rows; no posted amount is accepted.
-const IN_APP_RAILS = ['lightning', 'opennode', 'alipay', 'wechatpay', 'usdc', 'usdt'] as const;
+const IN_APP_RAILS = ['waffo', 'lightning', 'opennode', 'alipay', 'wechatpay', 'usdc', 'usdt'] as const;
 type InAppRail = (typeof IN_APP_RAILS)[number];
 const requestedRail = (fld('method') || Astro.url.searchParams.get('method') || '').trim();
 if (!(IN_APP_RAILS as readonly string[]).includes(requestedRail)) return Astro.redirect('/cart', 303);
@@ -100,6 +105,7 @@ const editAddressHref = (() => {
   return `/checkout?${params}`;
 })();
 const RAIL_LABEL: Record<InAppRail, string> = {
+  waffo: '使用 Waffo 安全支付',
   lightning: 'Pay with Lightning',
   opennode: 'Pay with Bitcoin',
   alipay: 'Pay with Alipay',
@@ -139,9 +145,11 @@ if (isPost) {
         if (!chosen) errors.push('Please choose a shipping option.');
         else {
           const { publicId, accessToken } = await claimOrderIdentity(env.DB);
-          const reservationTtl = rail === 'alipay' || rail === 'wechatpay' || rail === 'usdc' || rail === 'usdt'
-            ? MANUAL_WALLET_CHECKOUT_TTL_SECONDS
-            : cfg.payments.lightning.invoiceExpiryMinutes * 60 + 5 * 60;
+          const reservationTtl = rail === 'waffo'
+            ? WAFFO_CHECKOUT_TTL_SECONDS + RESERVATION_EXPIRY_GRACE_SECONDS
+            : rail === 'alipay' || rail === 'wechatpay' || rail === 'usdc' || rail === 'usdt'
+              ? MANUAL_WALLET_CHECKOUT_TTL_SECONDS
+              : cfg.payments.lightning.invoiceExpiryMinutes * 60 + RESERVATION_EXPIRY_GRACE_SECONDS;
           const reserved = await reserveInventory(env.DB, publicId, reservationItems(lines), reservationTtl, rail, purgeStockProductCache);
           if (!reserved) {
             await deleteGuestAccessIfUnsettled(env.DB, publicId);
