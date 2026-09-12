@@ -12,6 +12,10 @@ interface Props {
 }
 
 const { model } = Astro.props;
+const legalLinks = [
+  { href: '/privacy-policy', text: '隐私政策' },
+  { href: '/terms-of-service', text: '服务条款' },
+];
 ---
 
 <footer class="mt-10 border-t-2 border-gray-900 bg-[color:var(--market-surface)]">
@@ -28,6 +32,14 @@ const { model } = Astro.props;
       <span>客服邮箱：</span>
       <span class="underline underline-offset-2">support@mingshop123.com</span>
     </a>
+
+    <nav aria-label="Legal" class="flex flex-wrap items-center gap-x-5 gap-y-2">
+      {legalLinks.map((link) => (
+        <a href={link.href} class="hover:text-gray-900">
+          {link.text}
+        </a>
+      ))}
+    </nav>
 
     {
       model.footerLinks.length > 0 && (
