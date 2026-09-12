@@ -10,6 +10,10 @@ interface Props {
 }
 
 const { model } = Astro.props;
+const legalLinks = [
+  { href: '/privacy-policy', text: '隐私政策' },
+  { href: '/terms-of-service', text: '服务条款' },
+];
 ---
 
 <footer class="border-t border-line">
@@ -19,6 +23,13 @@ const { model } = Astro.props;
     <span class="font-serif text-base normal-case tracking-normal text-[color:var(--studio-bone)]">
       {model.storeName}
     </span>
+    <nav aria-label="Legal" class="flex flex-wrap items-center gap-x-8 gap-y-3">
+      {legalLinks.map((link) => (
+        <a href={link.href} class="hover:text-[color:var(--studio-bone)]">
+          {link.text}
+        </a>
+      ))}
+    </nav>
     {
       model.footerLinks.length > 0 && (
         <nav aria-label="Footer" class="flex flex-wrap items-center gap-x-8 gap-y-3">
