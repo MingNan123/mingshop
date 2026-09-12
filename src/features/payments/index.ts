@@ -28,10 +28,10 @@ export interface ActivePaymentMethodList extends Array<ActivePaymentMethod> {
   includes(searchElement: PaymentMethod, fromIndex?: number): boolean;
 }
 
-// New sales deliberately expose only stablecoins. Legacy provider code remains
-// below so historical webhooks/orders are still readable and serviceable.
-const ALL_METHODS: ActivePaymentMethod[] = ['usdt', 'usdc'];
-const OFFERED: ActivePaymentMethod[] = ['usdt', 'usdc'];
+// Waffo is the hosted-card rail. Direct stablecoins remain available alongside
+// it; legacy providers stay wired for historical webhooks and refunds.
+const ALL_METHODS: ActivePaymentMethod[] = ['waffo', 'usdt', 'usdc'];
+const OFFERED: ActivePaymentMethod[] = ['waffo', 'usdt', 'usdc'];
 const WEBHOOK_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
@@ -41,6 +41,7 @@ export function isPaymentMethod(value: string): value is PaymentMethod {
 export function isMethodAvailable(method: PaymentMethod, settings: StoreSettings, _vault = vaultReady()): boolean {
   const usdStore = getConfig().currency.toLowerCase() === 'usd';
   if (!usdStore) return false;
+  if (method === 'waffo') return isWaffoConfigured();
   if (method === 'usdc') return settings.usdcAutoVerifyReady;
   if (method === 'usdt') return settings.usdtAutoVerifyReady;
   return false;
@@ -51,6 +52,7 @@ export function hasRealMethod(settings: StoreSettings, vault = vaultReady()): bo
 }
 export function paymentsInDemoMode(_settings: StoreSettings): boolean { return false; }
 export function defaultMethod(settings: StoreSettings): ActivePaymentMethod {
+  if (settings.paymentProvider === 'waffo' && isWaffoConfigured()) return 'waffo';
   return settings.paymentProvider === 'usdc' ? 'usdc' : 'usdt';
 }
 export function enabledMethods(settings: StoreSettings, vault = vaultReady()): ActivePaymentMethodList {
