@@ -302,14 +302,28 @@ it is currently a beta interface.
 
 ## Payments
 
-Checkout and settlement depend on the `PaymentProvider` port (`src/features/payments`). New checkout deliberately offers only direct USDC/USDT payments. Each enabled Admin row is one buyer-selectable token/network profile; the buyer sees the fixed amount and receiving address on `/pay`, and the order is created only after settlement verifies.
+Checkout and settlement depend on the `PaymentProvider` port (`src/features/payments`). New checkout offers Waffo Pancake hosted checkout plus direct USDC/USDT payments. The order is created only after a signed Waffo webhook or verified on-chain settlement confirms payment.
 
 | Rail | What it is | Setup (all in Settings → Payments) |
 |---|---|---|
+| `waffo` | Hosted one-time checkout with server-calculated dynamic pricing | Waffo merchant ID, RSA private key, one-time product ID, and tax category |
 | `usdc` | Direct USDC checkout on an enabled EVM/TRON-style profile | label, network, chain kind, receiving address, RPC/API endpoint, token contract, decimals, confirmations |
 | `usdt` | Direct USDT checkout on an enabled EVM/TRON-style profile | label, network, chain kind, receiving address, RPC/API endpoint, token contract, decimals, confirmations; TronGrid key if using the official TRON endpoint |
 
-Legacy Stripe, Lightning, OpenNode, and Waffo providers stay available only for signed webhook compatibility with older orders, refunds, and migrations. They are not returned by `GET /api/checkout` and are not available for new sales.
+Legacy Stripe, Lightning, and OpenNode providers stay available only for signed webhook compatibility with older orders, refunds, and migrations. They are not returned by `GET /api/checkout` and are not available for new sales.
+
+### Waffo Pancake
+
+Create or select a published one-time product in Waffo, then configure the Worker. The private key is server-side only and must never be exposed to the browser or committed:
+
+```sh
+wrangler secret put WAFFO_MERCHANT_ID
+wrangler secret put WAFFO_PRIVATE_KEY
+wrangler secret put WAFFO_PRODUCT_ID
+wrangler secret put WAFFO_TAX_CATEGORY
+```
+
+Use one of Waffo's supported tax categories: `digital_goods`, `saas`, `software`, `ebook`, `online_course`, `consulting`, or `professional_service`. Register `https://<your-host>/api/webhook/waffo` as the HTTP webhook and subscribe to `order.completed`. Checkout amounts are recalculated from D1 and sent as a display-amount `priceSnapshot`; the Waffo product therefore acts as the published checkout container rather than the authority for the cart price.
 
 **How settlement is trusted.** The browser `/pay` page and polling/webhook paths do not create an order just because a buyer clicked checkout. They verify the observed transfer against the pending payment: token, network, receiving address, expected amount, confirmations, and expiry have to match before the order is marked paid.
 
