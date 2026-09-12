@@ -141,6 +141,7 @@ export function createWaffoProvider(): PaymentProvider {
         const session = await client.checkout.createSession({
           productId,
           currency,
+          language: 'zh-Hans',
           priceSnapshot: { amount: displayAmount(chargeableMinor, currency), taxCategory },
           buyerEmail: selectedShipping?.email ?? undefined,
           billingDetail: selectedShipping?.address.country ? billingDetail(selectedShipping.address) : undefined,

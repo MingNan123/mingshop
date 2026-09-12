@@ -22,6 +22,7 @@ import {
   isMethodAvailable,
   type PaymentMethod,
   STRIPE_CHECKOUT_TTL_SECONDS,
+  WAFFO_CHECKOUT_TTL_SECONDS,
   OPENNODE_CHECKOUT_TTL_SECONDS,
   RESERVATION_EXPIRY_GRACE_SECONDS,
   DEMO_CHECKOUT_TTL_SECONDS,
@@ -87,6 +88,9 @@ function reservationTtlSeconds(method: PaymentMethod): number {
       getConfig().payments.lightning.invoiceExpiryMinutes * 60 +
       RESERVATION_EXPIRY_GRACE_SECONDS
     );
+  }
+  if (method === 'waffo') {
+    return WAFFO_CHECKOUT_TTL_SECONDS + RESERVATION_EXPIRY_GRACE_SECONDS;
   }
   const providerTtl =
     method === 'opennode' ? OPENNODE_CHECKOUT_TTL_SECONDS : STRIPE_CHECKOUT_TTL_SECONDS;
@@ -239,7 +243,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   // USDC and USDT are in-app payment rails. Physical orders must collect the
   // destination and choose a server-priced shipping option before a pending
   // stablecoin payment is created.
-  const IN_APP_SHIPPING_RAILS = ['usdc', 'usdt'];
+  const IN_APP_SHIPPING_RAILS: PaymentMethod[] = ['waffo', 'usdc', 'usdt'];
   if (IN_APP_SHIPPING_RAILS.includes(selected) && shippingApplies) {
     const params = new URLSearchParams({ method: selected });
     if (productPublicId) {

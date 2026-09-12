@@ -110,9 +110,12 @@ export function parseStoreSettings(results: Array<{ key: string; value: string }
     shippingEnabled: map.get('shipping_enabled') == null ? null : map.get('shipping_enabled') === '1', shippingConfig: parseRuntimeShippingConfig(map.get('shipping_config')),
     weightUnit: isWeightUnit(map.get('weight_unit')) ? (map.get('weight_unit') as WeightUnit) : defaultWeightUnit(normalizeTimeZone(map.get('time_zone'))),
     turnstileEnabled: map.get('turnstile_enabled') === '1', turnstileSiteKey: map.get('turnstile_site_key') ?? null,
-    // New checkouts intentionally default to stablecoins only. Legacy provider
-    // configuration remains readable for historical order/webhook compatibility.
-    paymentProvider: map.get('payment_provider') === 'usdc' ? 'usdc' : 'usdt',
+    paymentProvider:
+      map.get('payment_provider') === 'waffo'
+        ? 'waffo'
+        : map.get('payment_provider') === 'usdc'
+          ? 'usdc'
+          : 'usdt',
     lightningBackend: map.get('lightning_backend') === 'lnbits' ? 'lnbits' : 'phoenixd', lnbitsUrl: map.get('lnbits_url') ?? null,
     phoenixdUrl: map.get('phoenixd_url') ?? null, opennodeApiUrl: map.get('opennode_api_url') ?? null,
     alipayPaymentUrl: map.get('alipay_payment_url') ?? null, wechatpayPaymentUrl: map.get('wechatpay_payment_url') ?? null,
