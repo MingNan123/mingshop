@@ -39,6 +39,7 @@ const query =
     ? normalizeSearchQuery(Astro.url.searchParams.get('q') ?? '')
     : '';
 const desc = (description ?? `浏览 ${storeName} 的商品。`).slice(0, 160);
+const showHomeNotice = Astro.url.pathname === '/';
 const origin = publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN);
 const canonical = canonicalOverride ?? new URL(Astro.url.pathname, origin).href;
 const ogImage = image ? new URL(image, origin).href : undefined;
@@ -91,6 +92,17 @@ const shell = buildShellModel({
     </script>
   </head>
   <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
+    {showHomeNotice && (
+      <div data-home-notice class="home-notice" role="dialog" aria-modal="true" aria-labelledby="home-notice-title">
+        <div class="home-notice-card">
+          <span class="home-notice-icon" aria-hidden="true">✉</span>
+          <p class="home-notice-eyebrow">购买提醒</p>
+          <h1 id="home-notice-title" class="home-notice-title">下单时邮箱必填！</h1>
+          <p class="home-notice-copy">部分商品采用邮箱发货，请填写真实、可正常收信的邮箱。</p>
+          <button type="button" data-home-notice-close class="home-notice-button">我知道了</button>
+        </div>
+      </div>
+    )}
     <StoreHeader model={shell} />
     <div class="flex items-center justify-end gap-3 px-6 pt-4">
       <label data-i18n-skip class="inline-flex items-center gap-2 text-xs text-gray-500">
@@ -350,6 +362,10 @@ const shell = buildShellModel({
           ,'最新': ['最新', 'Newest', '최신순', '新着順']
           ,'最新 ↓': ['最新 ↓', 'Newest ↓', '최신순 ↓', '新着順 ↓']
           ,'该支付方式当前不可用，请重新选择。': ['該支付方式目前無法使用，請重新選擇。', 'This payment method is currently unavailable. Please choose another.', '현재 이 결제 수단을 사용할 수 없습니다. 다른 수단을 선택하세요.', '現在この支払い方法は利用できません。別の方法を選択してください。']
+          ,'购买提醒': ['購買提醒', 'Purchase notice', '구매 안내', '購入のご案内']
+          ,'下单时邮箱必填！': ['下單時必須填寫電子郵件！', 'Email is required at checkout!', '주문 시 이메일은 필수입니다!', '注文時にメールアドレスは必須です！']
+          ,'部分商品采用邮箱发货，请填写真实、可正常收信的邮箱。': ['部分商品會透過電子郵件交付，請填寫真實且可正常收信的信箱。', 'Some products are delivered by email. Please enter a valid address that can receive messages.', '일부 상품은 이메일로 배송됩니다. 메일을 받을 수 있는 유효한 주소를 입력하세요.', '一部の商品はメールで納品されます。受信可能な正しいアドレスを入力してください。']
+          ,'我知道了': ['我知道了', 'Got it', '확인했습니다', '確認しました']
           ,'精选数字产品': ['精選數位產品', 'Featured digital products', '추천 디지털 상품', '注目のデジタル商品']
           ,'为你挑选的工具': ['為你挑選的工具', 'Tools selected for you', '당신을 위한 추천 도구', 'あなたのために選んだツール']
           ,'探索产品': ['探索產品', 'Explore products', '상품 둘러보기', '商品を見る']
@@ -430,6 +446,41 @@ const shell = buildShellModel({
           for (const record of records) for (const added of record.addedNodes) if (added instanceof HTMLElement) apply(select?.value ?? initial, added);
         }).observe(document.body, { childList: true, subtree: true });
       })();
+
+      (() => {
+        const notice = document.querySelector('[data-home-notice]');
+        if (!notice) return;
+        const key = 'mingshop_home_notice_seen';
+        let seen = false;
+        try { seen = sessionStorage.getItem(key) === '1'; } catch {}
+        if (seen) { notice.remove(); return; }
+        document.body.classList.add('home-notice-open');
+        const button = notice.querySelector('[data-home-notice-close]');
+        requestAnimationFrame(() => button?.focus());
+        button?.addEventListener('click', () => {
+          try { sessionStorage.setItem(key, '1'); } catch {}
+          notice.classList.add('is-closing');
+          document.body.classList.remove('home-notice-open');
+          setTimeout(() => notice.remove(), 320);
+        });
+      })();
     </script>
+    <style>
+      :global(body.home-notice-open) { overflow: hidden; }
+      .home-notice { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgba(245,245,247,.48); backdrop-filter: blur(20px) saturate(125%); -webkit-backdrop-filter: blur(20px) saturate(125%); animation: notice-in .38s ease both; }
+      .home-notice.is-closing { pointer-events: none; animation: notice-out .3s ease both; }
+      .home-notice-card { width: min(100%, 560px); padding: clamp(32px, 6vw, 58px); border: 1px solid rgba(255,255,255,.88); border-radius: 32px; text-align: center; background: rgba(255,255,255,.9); box-shadow: 0 30px 90px rgba(15,23,42,.18); animation: notice-card-in .55s cubic-bezier(.22,1,.36,1) both; }
+      .home-notice-icon { display: grid; width: 58px; height: 58px; margin: 0 auto 24px; place-items: center; border-radius: 18px; color: white; font-size: 25px; background: linear-gradient(145deg,#111827,#374151); box-shadow: 0 12px 28px rgba(15,23,42,.22); }
+      .home-notice-eyebrow { margin: 0 0 10px; color: #6b7280; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+      .home-notice-title { margin: 0; color: #111827; font-size: clamp(30px,5vw,48px); font-weight: 700; letter-spacing: -.045em; line-height: 1.08; }
+      .home-notice-copy { max-width: 430px; margin: 20px auto 0; color: #5f6368; font-size: 16px; line-height: 1.75; }
+      .home-notice-button { margin-top: 30px; border: 0; border-radius: 999px; padding: 12px 28px; color: white; font-size: 14px; font-weight: 650; background: #111827; box-shadow: 0 10px 24px rgba(15,23,42,.18); transition: transform .2s ease, box-shadow .2s ease, background .2s ease; }
+      .home-notice-button:hover { transform: translateY(-2px); background: #000; box-shadow: 0 15px 30px rgba(15,23,42,.24); }
+      .home-notice-button:focus-visible { outline: 4px solid rgba(0,113,227,.28); outline-offset: 3px; }
+      @keyframes notice-in { from { opacity: 0; } }
+      @keyframes notice-out { to { opacity: 0; } }
+      @keyframes notice-card-in { from { opacity: 0; transform: translateY(18px) scale(.96); } }
+      @media (prefers-reduced-motion: reduce) { .home-notice, .home-notice-card, .home-notice.is-closing { animation-duration: .01ms; } }
+    </style>
   </body>
 </html>
