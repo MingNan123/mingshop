@@ -92,7 +92,21 @@ const shell = buildShellModel({
   </head>
   <body class="flex min-h-screen flex-col bg-paper text-ink antialiased">
     <StoreHeader model={shell} />
-    <div class="flex justify-end px-6 pt-4">
+    <div class="flex items-center justify-end gap-3 px-6 pt-4">
+      <label data-i18n-skip class="inline-flex items-center gap-2 text-xs text-gray-500">
+        <span class="sr-only">语言</span>
+        <select
+          data-language-select
+          aria-label="语言"
+          class="rounded-md border border-line bg-white/60 px-3 py-2 text-xs text-gray-600 transition hover:border-brand focus:border-brand focus:outline-none"
+        >
+          <option value="zh-Hans">简体中文</option>
+          <option value="zh-Hant">繁體中文</option>
+          <option value="en">English</option>
+          <option value="ko">한국어</option>
+          <option value="ja">日本語</option>
+        </select>
+      </label>
       <button
         type="button"
         data-page-refresh
@@ -270,6 +284,149 @@ const shell = buildShellModel({
           for (const record of records) {
             for (const node of record.addedNodes) if (node instanceof HTMLElement) translate(node);
           }
+        }).observe(document.body, { childList: true, subtree: true });
+      })();
+
+      (() => {
+        const supported = ['zh-Hans', 'zh-Hant', 'en', 'ko', 'ja'];
+        const phrases = {
+          '购物车': ['購物車', 'Cart', '장바구니', 'カート'],
+          '继续购物': ['繼續購物', 'Continue shopping', '쇼핑 계속하기', '買い物を続ける'],
+          '账户': ['帳戶', 'Account', '계정', 'アカウント'],
+          '我的订单': ['我的訂單', 'My orders', '내 주문', '注文履歴'],
+          '退出登录': ['登出', 'Sign out', '로그아웃', 'ログアウト'],
+          '当前登录账号：': ['目前登入帳戶：', 'Signed in as:', '로그인 계정:', 'ログイン中:'],
+          '暂无订单。': ['暫無訂單。', 'No orders yet.', '주문이 없습니다.', '注文はまだありません。'],
+          '开始购物': ['開始購物', 'Start shopping', '쇼핑 시작', '買い物を始める'],
+          '搜索': ['搜尋', 'Search', '검색', '検索'],
+          '搜索商品': ['搜尋商品', 'Search products', '상품 검색', '商品を検索'],
+          '数量': ['數量', 'Quantity', '수량', '数量'],
+          '更新': ['更新', 'Update', '업데이트', '更新'],
+          '删除': ['刪除', 'Remove', '삭제', '削除'],
+          '小计': ['小計', 'Subtotal', '소계', '小計'],
+          '结账': ['結帳', 'Checkout', '결제', 'お支払い'],
+          '当前暂时无法结账。': ['目前暫時無法結帳。', 'Checkout is currently unavailable.', '현재 결제할 수 없습니다.', '現在お支払いをご利用いただけません。'],
+          '配送至': ['配送至', 'Ship to', '배송지', '配送先'],
+          '件': ['件', 'each', '개', '点'],
+          '缺货': ['缺貨', 'Out of stock', '품절', '在庫切れ'],
+          'Waffo 支付': ['Waffo 支付', 'Pay with Waffo', 'Waffo로 결제', 'Waffoで支払う'],
+          '安全托管结账': ['安全託管結帳', 'Secure hosted checkout', '안전한 호스팅 결제', '安全なホスト型決済'],
+          '银行卡支付': ['銀行卡支付', 'Pay with card', '카드로 결제', 'カードで支払う'],
+          '支持 Visa、Mastercard、Apple Pay 等': ['支援 Visa、Mastercard、Apple Pay 等', 'Visa, Mastercard, Apple Pay & more', 'Visa, Mastercard, Apple Pay 등 지원', 'Visa、Mastercard、Apple Pay などに対応'],
+          '支付失败。': ['支付失敗。', 'Payment failed.', '결제에 실패했습니다.', '支払いに失敗しました。'],
+          '支付成功。': ['支付成功。', 'Payment successful.', '결제가 완료되었습니다.', '支払いが完了しました。'],
+          '订单已确认': ['訂單已確認', 'Order confirmed', '주문 확인 완료', '注文が確定しました'],
+          '订单': ['訂單', 'Order', '주문', '注文'],
+          '商品': ['商品', 'Product', '상품', '商品'],
+          '价格': ['價格', 'Price', '가격', '価格'],
+          '总计': ['總計', 'Total', '합계', '合計'],
+          '保存': ['儲存', 'Save', '저장', '保存'],
+          '取消': ['取消', 'Cancel', '취소', 'キャンセル'],
+          '编辑': ['編輯', 'Edit', '편집', '編集'],
+          '创建': ['建立', 'Create', '만들기', '作成'],
+          '加载中…': ['載入中…', 'Loading...', '로딩 중…', '読み込み中…'],
+          '错误': ['錯誤', 'Error', '오류', 'エラー'],
+          '成功': ['成功', 'Success', '성공', '成功'],
+          '刷新': ['重新整理', 'Refresh', '새로고침', '更新'],
+          '刷新页面': ['重新整理頁面', 'Refresh page', '페이지 새로고침', 'ページを更新'],
+          '关闭购物车': ['關閉購物車', 'Close cart', '장바구니 닫기', 'カートを閉じる'],
+          '立即购买': ['立即購買', 'Buy now', '바로 구매', '今すぐ購入'],
+          '加入购物车': ['加入購物車', 'Add to cart', '장바구니에 추가', 'カートに追加'],
+          '返回': ['返回', 'Back', '뒤로', '戻る'],
+          '邮箱': ['電子郵件', 'Email', '이메일', 'メール'],
+          '姓名': ['姓名', 'Name', '이름', '氏名'],
+          '地址': ['地址', 'Address', '주소', '住所'],
+          '城市': ['城市', 'City', '도시', '市区町村'],
+          '邮政编码': ['郵遞區號', 'Postal code', '우편번호', '郵便番号'],
+          '请选择配送方式。': ['請選擇配送方式。', 'Please choose a shipping option.', '배송 방법을 선택하세요.', '配送方法を選択してください。'],
+          '返回商城': ['返回商城', 'Back to store', '스토어로 돌아가기', 'ストアに戻る'],
+          '联系客服': ['聯絡客服', 'Contact support', '고객센터 문의', 'サポートに連絡'],
+          '隐私政策': ['隱私權政策', 'Privacy policy', '개인정보 처리방침', 'プライバシーポリシー'],
+          '服务条款': ['服務條款', 'Terms of service', '서비스 약관', '利用規約']
+          ,'语言': ['語言', 'Language', '언어', '言語']
+          ,'全部商品': ['全部商品', 'All products', '전체 상품', 'すべての商品']
+          ,'商品分类': ['商品分類', 'Product categories', '상품 카테고리', '商品カテゴリー']
+          ,'排序': ['排序', 'Sort', '정렬', '並び替え']
+          ,'最新': ['最新', 'Newest', '최신순', '新着順']
+          ,'最新 ↓': ['最新 ↓', 'Newest ↓', '최신순 ↓', '新着順 ↓']
+          ,'精选数字产品': ['精選數位產品', 'Featured digital products', '추천 디지털 상품', '注目のデジタル商品']
+          ,'为你挑选的工具': ['為你挑選的工具', 'Tools selected for you', '당신을 위한 추천 도구', 'あなたのために選んだツール']
+          ,'探索产品': ['探索產品', 'Explore products', '상품 둘러보기', '商品を見る']
+          ,'持续更新的在线效率工具。': ['持續更新的線上效率工具。', 'Continuously updated online productivity tools.', '계속 업데이트되는 온라인 생산성 도구입니다.', '継続的に更新されるオンライン生産性ツールです。']
+          ,'模板与素材': ['範本與素材', 'Templates & assets', '템플릿과 자산', 'テンプレートと素材']
+          ,'拿来即用的网站与 UI 资源。': ['拿來即用的網站與 UI 資源。', 'Ready-to-use website and UI resources.', '바로 사용할 수 있는 웹사이트 및 UI 리소스입니다.', 'すぐに使えるWebサイトとUIリソースです。']
+          ,'知识产品': ['知識產品', 'Knowledge products', '지식 상품', '知識コンテンツ']
+          ,'一次购买，长期学习与使用。': ['一次購買，長期學習與使用。', 'Buy once, learn and use for the long term.', '한 번 구매하고 오래 배우고 사용하세요.', '一度の購入で、長期的に学び利用できます。']
+          ,'专业数字服务': ['專業數位服務', 'Professional digital services', '전문 디지털 서비스', 'プロ向けデジタルサービス']
+          ,'SaaS 在线服务': ['SaaS 線上服務', 'SaaS online services', 'SaaS 온라인 서비스', 'SaaSオンラインサービス']
+          ,'开发者资源': ['開發者資源', 'Developer resources', '개발자 리소스', '開発者リソース']
+          ,'数字生产力': ['數位生產力', 'Digital productivity', '디지털 생산성', 'デジタル生産性']
+          ,'软件与数字产品': ['軟體與數位產品', 'Software & digital products', '소프트웨어 및 디지털 상품', 'ソフトウェアとデジタル商品']
+          ,'AI SaaS、AI 工具、网站模板、UI 素材、数字资料与一次性学习教程。挑选真正值得留下的数字产品。': ['AI SaaS、AI 工具、網站範本、UI 素材、數位資料與一次性學習教程。挑選真正值得留下的數位產品。', 'AI SaaS, AI tools, website templates, UI assets, digital resources, and focused learning guides. Discover digital products truly worth keeping.', 'AI SaaS, AI 도구, 웹사이트 템플릿, UI 자산, 디지털 자료와 학습 가이드를 만나보세요. 소장할 가치가 있는 디지털 상품만 선별했습니다.', 'AI SaaS、AIツール、Webサイトテンプレート、UI素材、デジタル資料、学習ガイド。本当に価値のあるデジタル商品を厳選しています。']
+        };
+        const indexes = { 'zh-Hant': 0, en: 1, ko: 2, ja: 3 };
+        const aliases = new Map();
+        for (const [zh, variants] of Object.entries(phrases)) {
+          aliases.set(zh, zh);
+          for (const value of variants) aliases.set(value, zh);
+        }
+        const key = 'mingshop_language';
+        const select = document.querySelector('[data-language-select]');
+        const initial = (() => { try { const value = localStorage.getItem(key); return supported.includes(value) ? value : 'zh-Hans'; } catch { return 'zh-Hans'; } })();
+        const translateText = (value, language) => {
+          const trimmed = value.trim();
+          const canonical = aliases.get(trimmed);
+          if (!canonical) {
+            const productCount = trimmed.match(/^(\d+)\s*(?:个产品|個產品|products|개 상품|商品)(.*)$/);
+            if (productCount) {
+              const suffix = language === 'zh-Hans' ? `个产品${productCount[2]}` : language === 'zh-Hant' ? ` 個產品${productCount[2]}` : language === 'en' ? ` products${productCount[2]}` : language === 'ko' ? `개 상품${productCount[2]}` : ` 商品${productCount[2]}`;
+              return value.replace(trimmed, `${productCount[1]} ${suffix}`.replace('  ', ' '));
+            }
+            const viewProduct = trimmed.match(/^(?:查看|View|보기|表示) (.+)$/);
+            if (viewProduct) {
+              const label = language === 'zh-Hans' ? '查看' : language === 'zh-Hant' ? '查看' : language === 'en' ? 'View' : language === 'ko' ? '보기' : '表示';
+              return value.replace(trimmed, `${label} ${viewProduct[1]}`);
+            }
+            const support = trimmed.match(/^(?:联系客服|聯絡客服|Contact support|고객센터 문의|サポートに連絡)[：:]\s*(.+)$/);
+            if (support) {
+              const label = language === 'zh-Hans' ? '联系客服' : language === 'zh-Hant' ? '聯絡客服' : language === 'en' ? 'Contact support' : language === 'ko' ? '고객센터 문의' : 'サポートに連絡';
+              return value.replace(trimmed, `${label}: ${support[1]}`);
+            }
+            return value;
+          }
+          const translated = language === 'zh-Hans' ? canonical : phrases[canonical]?.[indexes[language]] ?? canonical;
+          return value.replace(trimmed, translated);
+        };
+        const apply = (language, root = document.body) => {
+          document.documentElement.lang = language;
+          if (select) {
+            select.value = language;
+            select.setAttribute('aria-label', language === 'zh-Hans' ? '语言' : phrases['语言'][indexes[language]]);
+          }
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          const nodes = []; let node;
+          while ((node = walker.nextNode())) nodes.push(node);
+          for (const textNode of nodes) {
+            if (textNode.parentElement?.closest('[data-i18n-skip]')) continue;
+            if (textNode.nodeValue) textNode.nodeValue = translateText(textNode.nodeValue, language);
+          }
+          for (const el of root.querySelectorAll?.('input,textarea,button,[aria-label],[title]') ?? []) {
+            if (el.closest('[data-i18n-skip]')) continue;
+            for (const attr of ['placeholder', 'aria-label', 'title']) {
+              const value = el.getAttribute(attr);
+              if (value) el.setAttribute(attr, translateText(value, language));
+            }
+          }
+        };
+        const setLanguage = (language) => {
+          const next = supported.includes(language) ? language : 'zh-Hans';
+          try { localStorage.setItem(key, next); } catch {}
+          apply(next);
+        };
+        select?.addEventListener('change', (event) => setLanguage(event.target.value));
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => apply(initial)); else apply(initial);
+        new MutationObserver((records) => {
+          for (const record of records) for (const added of record.addedNodes) if (added instanceof HTMLElement) apply(select?.value ?? initial, added);
         }).observe(document.body, { childList: true, subtree: true });
       })();
     </script>
