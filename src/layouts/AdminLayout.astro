@@ -40,27 +40,31 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? '菜单';
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{pageTitle}</title>
   </head>
-  <body class="min-h-screen bg-paper text-ink antialiased">
-    <div class="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8 sm:flex-row sm:gap-10">
-      <aside class="w-full shrink-0 sm:w-52 sm:border-r sm:border-line sm:pr-6">
-        <a href="/" class="mb-4 block font-serif text-xl tracking-tight sm:mb-8">{storeName}</a>
+  <body class="admin-body min-h-screen bg-paper text-ink antialiased">
+    <div class="admin-shell mx-auto flex max-w-[1500px] flex-col gap-5 px-4 py-4 sm:flex-row sm:items-start sm:gap-6 sm:px-6 sm:py-6">
+      <aside class="admin-sidebar w-full shrink-0 sm:sticky sm:top-6 sm:w-60">
+        <a href="/" class="admin-brand mb-4 flex items-center gap-3 px-2 sm:mb-7">
+          <span class="admin-brand-mark" aria-hidden="true">M</span>
+          <span><span class="block text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">Ming Shop</span><span class="block text-base font-semibold tracking-tight text-gray-900">{storeName}</span></span>
+        </a>
         <input type="checkbox" id="admin-nav" data-admin-nav-toggle class="peer sr-only" aria-label="展开或收起后台菜单" />
         <label for="admin-nav" data-admin-nav-summary class="flex cursor-pointer select-none items-center justify-between gap-3 rounded-md border border-line bg-white/60 px-4 py-3 transition hover:border-brand sm:hidden">
           <span class="flex flex-col gap-0.5"><span class="text-[0.625rem] uppercase tracking-[0.25em] text-gray-400">管理后台</span><span class="font-serif text-lg leading-none tracking-tight text-gray-900">{currentLabel}</span></span>
           <svg data-admin-nav-chevron class="size-4 shrink-0 text-gray-400 transition-transform duration-300" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 7.5 10 12.5 15 7.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </label>
-        <nav data-admin-nav-list class="mt-2 hidden overflow-hidden rounded-md border border-line bg-white/60 text-xs uppercase tracking-widest peer-checked:block sm:mt-0 sm:block sm:space-y-0.5 sm:rounded-none sm:border-0 sm:bg-transparent">
+        <nav data-admin-nav-list class="admin-nav mt-2 hidden overflow-hidden rounded-2xl border border-white/70 bg-white/70 p-2 text-sm peer-checked:block sm:mt-0 sm:block sm:space-y-1">
           {nav.map((n) => (
-            <a href={n.href} aria-current={active === n.key ? 'page' : undefined} class={`flex items-center justify-between border-b border-l-2 border-line px-4 py-3 transition last:border-b-0 sm:block sm:border-b-0 sm:px-3 sm:py-1.5 ${active === n.key ? 'border-l-brand bg-paper font-medium text-brand sm:bg-transparent' : 'border-l-transparent text-gray-500 hover:bg-paper hover:text-brand sm:hover:bg-transparent'}`}>
-              <span>{n.label}</span>{active === n.key && <span aria-hidden="true" class="size-1.5 rounded-full bg-brand sm:hidden" />}
+            <a data-section={n.key} href={n.href} aria-current={active === n.key ? 'page' : undefined} class={`admin-nav-link flex items-center justify-between rounded-xl px-3 py-2.5 font-medium transition ${active === n.key ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:bg-white hover:text-gray-950'}`}>
+              <span>{n.label}</span>{active === n.key && <span aria-hidden="true" class="size-1.5 rounded-full bg-white/80" />}
             </a>
           ))}
         </nav>
-        <div class="mt-4 flex gap-4 text-xs uppercase tracking-widest text-gray-400 sm:mt-8 sm:flex-col sm:gap-2"><a href="/" class="hover:text-brand">&larr; 查看商城</a>{showLogout && <a href="/admin/logout" class="hover:text-brand">退出登录</a>}</div>
+        <div class="admin-sidebar-actions mt-4 flex gap-4 px-3 text-xs font-medium text-gray-400 sm:mt-6 sm:flex-col sm:gap-2"><a href="/" class="hover:text-gray-950">↗ 查看商城</a>{showLogout && <a href="/admin/logout" class="hover:text-gray-950">退出登录</a>}</div>
       </aside>
-      <main class="min-w-0 flex-1">
-        <div class="mb-6 flex justify-end">
-          <button type="button" data-page-refresh class="inline-flex items-center gap-2 rounded-md border border-line bg-white/60 px-3 py-2 text-xs uppercase tracking-widest text-gray-500 transition hover:border-brand hover:text-brand" title="刷新页面" aria-label="刷新页面">
+      <main class="admin-main min-w-0 flex-1">
+        <div class="admin-toolbar mb-7 flex items-center justify-between gap-4">
+          <div><p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">管理后台</p><p class="mt-0.5 text-lg font-semibold tracking-tight text-gray-950">{currentLabel}</p></div>
+          <button type="button" data-page-refresh class="admin-refresh inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/80 px-4 py-2 text-xs font-medium text-gray-600 shadow-sm transition hover:text-gray-950" title="刷新页面" aria-label="刷新页面">
             <svg class="size-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
               <path d="M16 10a6 6 0 1 1-1.76-4.24" stroke-linecap="round" />
               <path d="M16 4v4h-4" stroke-linecap="round" stroke-linejoin="round" />
@@ -78,8 +82,10 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? '菜单';
     <script>
       (() => {
         document.querySelector('[data-page-refresh]')?.addEventListener('click', () => {
+          document.body.classList.add('is-refreshing');
           window.location.reload();
         });
+        requestAnimationFrame(() => document.body.classList.add('is-ready'));
         const t: Record<string, string> = {
           Dashboard:'仪表盘', Products:'商品', Product:'商品', Orders:'订单', Order:'订单', Customers:'客户', Categories:'分类', Pages:'页面', Navigation:'导航', Shipping:'配送', Media:'媒体库', Settings:'设置',
           Save:'保存', Cancel:'取消', Delete:'删除', Edit:'编辑', Create:'创建', Update:'更新', Add:'添加', Remove:'删除', Search:'搜索', Filter:'筛选', Reset:'重置', Close:'关闭', Back:'返回', Next:'下一步', Previous:'上一步', Submit:'提交', Confirm:'确认', Loading:'加载中',
