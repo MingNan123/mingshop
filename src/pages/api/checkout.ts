@@ -220,11 +220,16 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   const requestedRaw = String(form.get('method') ?? '').trim();
   const requested = requestedRaw as PaymentMethod;
   const settings = await getStoreSettings(env.DB);
+  const unavailableMethodRedirect = () =>
+    redirect(
+      `${errorPath}?error=${encodeURIComponent('该支付方式当前不可用，请重新选择。')}`,
+      303,
+    );
   if (requestedRaw && !isNewCheckoutPaymentMethod(requestedRaw)) {
-    return redirect('/payment-setup', 303);
+    return unavailableMethodRedirect();
   }
   if (requestedRaw && !isMethodAvailable(requested, settings)) {
-    return redirect(`/payment-setup?method=${encodeURIComponent(requestedRaw)}`, 303);
+    return unavailableMethodRedirect();
   }
   const available = enabledMethods(settings);
   // No method enabled → no checkout. Bounce back to the cart (which says so).
