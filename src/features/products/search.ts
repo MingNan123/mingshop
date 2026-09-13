@@ -19,28 +19,69 @@ function exclusionSql(ids: number[]): string {
   return ids.length > 0 ? ` AND p.id NOT IN (${ids.map(() => '?').join(',')})` : '';
 }
 
+/** Unicode-safe, literal LIKE terms for the storefront's broad fuzzy search. */
+export function toFuzzyTerms(raw: string): string[] {
+  return normalizeSearchQuery(raw)
+    .toLowerCase()
+    .split(/\s+/u)
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((term) => `%${term.replace(/[\\%_]/g, '\\$&')}%`);
+}
+
+/**
+ * Build one searchable text document per product. Unlike the legacy FTS table,
+ * this includes Chinese text and all buyer-visible/catalog-identifying fields:
+ * product copy, slug/id, filename, categories, variants/SKUs and extras.
+ */
+const FUZZY_PRODUCT_SOURCE = `(
+  SELECT p.*,
+         LOWER(
+           COALESCE(p.name, '') || ' ' ||
+           COALESCE(p.description, '') || ' ' ||
+           COALESCE(p.slug, '') || ' ' ||
+           COALESCE(p.public_id, '') || ' ' ||
+           COALESCE(p.variant_label, '') || ' ' ||
+           COALESCE(p.file_name, '') || ' ' ||
+           COALESCE((SELECT GROUP_CONCAT(c.name || ' ' || c.slug, ' ')
+                       FROM product_categories pc
+                       JOIN categories c ON c.id = pc.category_id
+                      WHERE pc.product_id = p.id), '') || ' ' ||
+           COALESCE((SELECT GROUP_CONCAT(v.label || ' ' || COALESCE(v.sku, ''), ' ')
+                       FROM product_variants v
+                      WHERE v.product_id = p.id AND v.active = 1), '') || ' ' ||
+           COALESCE((SELECT GROUP_CONCAT(e.label, ' ')
+                       FROM product_extras e
+                      WHERE e.product_id = p.id AND e.active = 1), '')
+         ) AS search_text
+    FROM products p
+) p`;
+
+function fuzzyWhere(terms: string[], excludeIds: number[]): string {
+  return terms.map(() => "p.search_text LIKE ? ESCAPE '\\'").join(' AND ') + exclusionSql(excludeIds);
+}
+
 /** Count active FTS matches, optionally excluding results supplied elsewhere. */
 export async function countSearchProducts(
   db: D1Database,
   raw: string,
   excludeIds: number[] = [],
 ): Promise<number> {
-  const query = toFtsQuery(raw);
-  if (!query) return 0;
+  const terms = toFuzzyTerms(raw);
+  if (terms.length === 0) return 0;
 
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS n
-         FROM products_fts f
-         JOIN products p ON p.id = f.rowid
-        WHERE products_fts MATCH ? AND p.active = 1${exclusionSql(excludeIds)}`,
+         FROM ${FUZZY_PRODUCT_SOURCE}
+        WHERE p.active = 1 AND ${fuzzyWhere(terms, excludeIds)}`,
     )
-    .bind(query, ...excludeIds)
+    .bind(...terms, ...excludeIds)
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
 
-/** One page of active FTS matches, ranked by relevance (bm25). */
+/** One page of active fuzzy matches, with name matches ranked first. */
 export async function searchProducts(
   db: D1Database,
   raw: string,
@@ -48,19 +89,26 @@ export async function searchProducts(
   offset = 0,
   excludeIds: number[] = [],
 ): Promise<Product[]> {
-  const query = toFtsQuery(raw);
-  if (!query || limit <= 0) return [];
+  const normalized = normalizeSearchQuery(raw).toLowerCase();
+  const terms = toFuzzyTerms(normalized);
+  if (terms.length === 0 || limit <= 0) return [];
+  const escaped = normalized.replace(/[\\%_]/g, '\\$&');
 
   const { results } = await db
     .prepare(
       `SELECT p.*
-         FROM products_fts f
-         JOIN products p ON p.id = f.rowid
-        WHERE products_fts MATCH ? AND p.active = 1${exclusionSql(excludeIds)}
-        ORDER BY bm25(products_fts)
+         FROM ${FUZZY_PRODUCT_SOURCE}
+        WHERE p.active = 1 AND ${fuzzyWhere(terms, excludeIds)}
+        ORDER BY CASE
+                   WHEN LOWER(p.name) = ? THEN 0
+                   WHEN LOWER(p.name) LIKE ? ESCAPE '\\' THEN 1
+                   WHEN LOWER(p.name) LIKE ? ESCAPE '\\' THEN 2
+                   ELSE 3
+                 END,
+                 p.created_at DESC, p.id DESC
         LIMIT ? OFFSET ?`,
     )
-    .bind(query, ...excludeIds, limit, offset)
+    .bind(...terms, ...excludeIds, escaped, `${escaped}%`, `%${escaped}%`, limit, offset)
     .all<Product>();
   return results ?? [];
 }

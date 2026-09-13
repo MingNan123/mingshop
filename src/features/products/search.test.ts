@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toFtsQuery, editDistance } from './search';
+import { toFtsQuery, toFuzzyTerms, editDistance } from './search';
 
 describe('toFtsQuery', () => {
   it('prefix-matches each token', () => {
@@ -17,6 +17,20 @@ describe('toFtsQuery', () => {
   it('returns null for empty or symbol-only input', () => {
     expect(toFtsQuery('   ')).toBeNull();
     expect(toFtsQuery('!!!')).toBeNull();
+  });
+});
+
+describe('toFuzzyTerms', () => {
+  it('keeps Chinese queries and wraps them for substring matching', () => {
+    expect(toFuzzyTerms('接口文档')).toEqual(['%接口文档%']);
+  });
+
+  it('lets separate terms match across different product fields', () => {
+    expect(toFuzzyTerms('API 模板')).toEqual(['%api%', '%模板%']);
+  });
+
+  it('escapes LIKE wildcards so user input stays literal', () => {
+    expect(toFuzzyTerms('50% a_b')).toEqual(['%50\\%%', '%a\\_b%']);
   });
 });
 
