@@ -20,8 +20,11 @@ function purgeFailure(
 
 /**
  * Invalidate low-frequency content mutations synchronously after their D1
- * write. A failed tag purge falls back to the whole entrypoint cache; if that
- * also fails, the handler fails rather than silently accepting stale content.
+ * write. A failed tag purge falls back to the whole entrypoint cache. If both
+ * attempts fail, keep the successful D1 mutation successful: shared-cache TTLs
+ * bound the stale window, while the structured errors remain available in logs.
+ * A transient cache API problem must never turn an already-committed admin save
+ * into a misleading HTTP 500 that tempts the merchant to submit it again.
  */
 export async function purgeCacheTags(
   tags: Iterable<string>,
@@ -46,7 +49,13 @@ export async function purgeCacheTags(
     purgeFailure('everything', error instanceof Error ? error.message : String(error));
   }
 
-  throw new Error('The data was saved, but the Workers cache could not be invalidated.');
+  console.warn(
+    JSON.stringify({
+      event: 'workers_cache_purge_deferred',
+      tags: normalized,
+      message: 'The data was saved; cached storefront responses will expire by TTL.',
+    }),
+  );
 }
 
 export function purgeProductCache(
