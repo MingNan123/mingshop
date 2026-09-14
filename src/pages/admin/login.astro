@@ -19,7 +19,9 @@ let error = '';
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const turnstileEnabled = Astro.locals.settings?.turnstileEnabled === true;
-  const tsSecret = turnstileEnabled ? await getSecret(env.DB, 'turnstile_secret_key') : null;
+  const tsSecret = turnstileEnabled
+    ? (env.TURNSTILE_SECRET || await getSecret(env.DB, 'turnstile_secret_key'))
+    : null;
   const tsOk = await verifyConfiguredTurnstile(turnstileEnabled, form.get(TURNSTILE_FIELD)?.toString(), tsSecret, Astro.request.headers.get('CF-Connecting-IP'));
   const pwOk = await cred.verify(form.get('password')?.toString() ?? '');
   if (!tsOk) error = '验证失败，请重试。';

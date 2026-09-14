@@ -5,8 +5,13 @@
 // widget auto-solves and injects a hidden `cf-turnstile-response` field into the
 // surrounding <form>, which the server verifies on submit. Near-zero-JS: no custom
 // script, just Cloudflare's auto-rendering api.js. data-action is the Spin marker.
+import { env } from 'cloudflare:workers';
 const s = Astro.locals.settings;
-const siteKey = s?.turnstileEnabled ? (s?.turnstileSiteKey ?? undefined) : undefined;
+// Deployment secrets/vars protect checkout too, so prefer that known-good pair.
+// The D1 values remain a dashboard-configurable fallback for cloned shops.
+const siteKey = s?.turnstileEnabled
+  ? (env.TURNSTILE_SITE_KEY || s?.turnstileSiteKey || undefined)
+  : undefined;
 ---
 
 {
