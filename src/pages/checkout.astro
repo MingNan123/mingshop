@@ -26,6 +26,8 @@ import { reserveInventory, releaseInventoryReservation } from '../features/order
 import { reservationItems } from '../features/orders/reservationItems.ts';
 import { purgeStockProductCache } from '../features/cache/purge';
 import { buyerRequirements, parseBuyerDetails } from '../features/checkout/buyer';
+import { TURNSTILE_FIELD, verifyCheckoutTurnstile } from '../features/auth/turnstile';
+import CheckoutTurnstile from '../features/auth/CheckoutTurnstile.astro';
 
 const cfg = getConfig();
 const isPost = Astro.request.method === 'POST';
@@ -124,6 +126,11 @@ let options: { label: string; amountCents: number; pickup?: boolean }[] = [];
 const errors: string[] = [];
 
 if (isPost) {
+  const turnstileOk = await verifyCheckoutTurnstile(
+    form?.get(TURNSTILE_FIELD)?.toString(), env.TURNSTILE_SECRET,
+    env.TURNSTILE_HOSTNAMES, Astro.request.headers.get('CF-Connecting-IP'),
+  );
+  if (!turnstileOk) errors.push('请完成人机验证后再继续付款。');
   const buyer = parseBuyerDetails({ email: addr.email, name: addr.name, virtual_region: addr.virtualRegion }, buyerFields);
   if (!buyer) errors.push('请填写有效邮箱、姓名和虚拟地区。');
   if (!addr.line1) errors.push('Address is required.');
@@ -210,6 +217,7 @@ const hasErrors = errors.length > 0;
         <input type="hidden" name="email" value={addr.email} /><input type="hidden" name="name" value={addr.name} /><input type="hidden" name="virtual_region" value={addr.virtualRegion} /><input type="hidden" name="line1" value={addr.line1} /><input type="hidden" name="line2" value={addr.line2} /><input type="hidden" name="city" value={addr.city} /><input type="hidden" name="state" value={addr.state} /><input type="hidden" name="postal" value={addr.postal} /><input type="hidden" name="country" value={addr.country} />
         <div class="rounded-lg border border-line bg-surface p-4 text-sm"><div class="mb-1 font-medium">Ship to</div><div class="text-muted">{addr.name}, {addr.line1}{addr.line2 ? `, ${addr.line2}` : ''}, {addr.city} {addr.state} {addr.postal}, {addr.country}</div><a href={editAddressHref} class="mt-2 inline-block text-xs font-medium text-accent">Edit address</a></div>
         <fieldset class="space-y-2"><legend class="mb-1 text-sm font-medium">Shipping</legend>{options.map((o, i) => <label class="flex cursor-pointer items-center justify-between rounded-lg border border-line bg-surface p-3 text-sm has-[:checked]:border-brand"><span class="flex items-center gap-2"><input type="radio" name="shipping_label" value={o.label} checked={i === 0} />{o.label}</span><span class="text-muted">{o.amountCents === 0 ? 'Free' : formatPrice(o.amountCents, currency)} · total {formatPrice(subtotalCents + o.amountCents, currency)}</span></label>)}</fieldset>
+        <CheckoutTurnstile />
         <button type="submit" class="w-full rounded-md bg-brand px-4 py-2.5 font-medium text-on-brand hover:bg-brand-hover">{RAIL_LABEL[rail]} →</button>
       </form>
     ) : (
@@ -223,6 +231,7 @@ const hasErrors = errors.length > 0;
         <div class="grid grid-cols-2 gap-3"><label class="block text-sm"><span class="mb-1 block font-medium">City</span><input type="text" name="city" value={addr.city} required class="w-full rounded-md border border-line px-3 py-2" /></label><label class="block text-sm"><span class="mb-1 block font-medium">State / Province</span><input type="text" name="state" value={addr.state} class="w-full rounded-md border border-line px-3 py-2" /></label></div>
         <div class="grid grid-cols-2 gap-3"><label class="block text-sm"><span class="mb-1 block font-medium">Postal code</span><input type="text" name="postal" value={addr.postal} required class="w-full rounded-md border border-line px-3 py-2" /></label><label class="block text-sm"><span class="mb-1 block font-medium">Country</span><select name="country" required class="w-full rounded-md border border-line px-3 py-2 bg-surface">{destinationChoices.map((c) => <option value={c.code} selected={c.code === addr.country}>{c.name}</option>)}</select></label></div>
         {knownCountries.length > 0 && <p class="text-xs text-faint">Ships to: {knownCountries.join(', ')}</p>}
+        <CheckoutTurnstile />
         <button type="submit" class="w-full rounded-md bg-brand px-4 py-2.5 font-medium text-on-brand hover:bg-brand-hover">Continue to shipping →</button>
       </form>
     )}

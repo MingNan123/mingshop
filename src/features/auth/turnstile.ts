@@ -40,8 +40,10 @@ export async function verifyTurnstileToken(
   token: string | null | undefined,
   secret: string,
   remoteIp?: string | null,
+  expectedAction?: string,
+  expectedHostnames?: ReadonlySet<string>,
 ): Promise<boolean> {
-  if (!token) return false;
+  if (!token || token.length > 2048 || (expectedHostnames && expectedHostnames.size === 0)) return false;
   const body = new URLSearchParams();
   body.set('secret', secret);
   body.set('response', token);
@@ -51,11 +53,25 @@ export async function verifyTurnstileToken(
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body,
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return false;
-    const data = (await res.json()) as { success?: boolean };
-    return data.success === true;
+    const data = (await res.json()) as { success?: boolean; action?: string; hostname?: string };
+    return data.success === true
+      && (!expectedAction || data.action === expectedAction)
+      && (!expectedHostnames || (typeof data.hostname === 'string' && expectedHostnames.has(data.hostname)));
   } catch {
     return false;
   }
+}
+
+export async function verifyCheckoutTurnstile(
+  token: string | null | undefined,
+  secret: string | null | undefined,
+  hostnameCsv: string | null | undefined,
+  remoteIp?: string | null,
+): Promise<boolean> {
+  const hostnames = new Set((hostnameCsv ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  if (!secret || hostnames.size === 0) return false;
+  return verifyTurnstileToken(token, secret, remoteIp, 'checkout', hostnames);
 }

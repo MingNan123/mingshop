@@ -1,0 +1,11 @@
+---
+import { env } from 'cloudflare:workers';
+const siteKey = env.TURNSTILE_SITE_KEY;
+---
+
+{siteKey && (
+  <div class="flex justify-center py-2">
+    <div class="cf-turnstile" data-sitekey={siteKey} data-action="checkout" />
+    <script is:inline async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
+  </div>
+)}

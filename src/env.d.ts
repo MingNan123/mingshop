@@ -43,6 +43,9 @@ declare namespace Cloudflare {
     IMAGE_BASE_URL?: string;
     MCP_URL?: string;
     CANONICAL_ORIGIN?: string;
+    TURNSTILE_SITE_KEY?: string;
+    TURNSTILE_SECRET?: string;
+    TURNSTILE_HOSTNAMES?: string;
     CF_ACCESS_TEAM_DOMAIN?: string;
     CF_ACCESS_AUD?: string;
 

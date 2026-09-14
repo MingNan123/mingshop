@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { verifyConfiguredTurnstile, verifyTurnstileToken } from './turnstile';
+import { verifyCheckoutTurnstile, verifyConfiguredTurnstile, verifyTurnstileToken } from './turnstile';
 
 const SECRET = 'test-secret';
 
@@ -49,6 +49,22 @@ describe('verifyTurnstileToken', () => {
       }),
     );
     expect(await verifyTurnstileToken('tok', SECRET)).toBe(false);
+  });
+
+  it('requires the expected action and approved hostname', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      success: true, action: 'checkout', hostname: 'mingshop123.com',
+    }))));
+    expect(await verifyCheckoutTurnstile('tok', SECRET, 'mingshop123.com')).toBe(true);
+    expect(await verifyCheckoutTurnstile('tok', SECRET, 'one.mingshop123.com')).toBe(false);
+  });
+
+  it('fails closed when checkout configuration is incomplete', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await verifyCheckoutTurnstile('tok', null, 'mingshop123.com')).toBe(false);
+    expect(await verifyCheckoutTurnstile('tok', SECRET, '')).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

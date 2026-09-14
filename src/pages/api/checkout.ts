@@ -46,6 +46,7 @@ import { mintLightningOrder } from '../../features/payments/lightning-provider';
 import { getLightningBackend } from '../../features/payments/lightning';
 import { clientControlledPriceFields } from '../../features/payments/checkout/priceGuard.ts';
 import { buyerRequirements, parseBuyerDetails } from '../../features/checkout/buyer.ts';
+import { TURNSTILE_FIELD, verifyCheckoutTurnstile } from '../../features/auth/turnstile.ts';
 
 export const prerender = false;
 
@@ -127,10 +128,23 @@ export const GET: APIRoute = async () => {
 // instead of a redirect. Form posts keep the existing browser flow below.
 export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   if ((request.headers.get('content-type') ?? '').includes('application/json')) {
+    const raw = await request.clone().json().catch(() => null) as Record<string, unknown> | null;
+    const token = typeof raw?.turnstile_token === 'string' ? raw.turnstile_token : null;
+    const ok = await verifyCheckoutTurnstile(token, env.TURNSTILE_SECRET, env.TURNSTILE_HOSTNAMES, request.headers.get('CF-Connecting-IP'));
+    if (!ok) return cjson({ error: 'Human verification required.', code: 'turnstile_required' }, 403);
     return handleJsonCheckout(request, url);
   }
 
   const form = await request.formData();
+  const turnstileOk = await verifyCheckoutTurnstile(
+    form.get(TURNSTILE_FIELD)?.toString(), env.TURNSTILE_SECRET,
+    env.TURNSTILE_HOSTNAMES, request.headers.get('CF-Connecting-IP'),
+  );
+  if (!turnstileOk) {
+    const productId = form.get('product_id')?.toString();
+    const back = productId ? `/express?product_id=${encodeURIComponent(productId)}` : '/cart';
+    return redirect(`${back}${back.includes('?') ? '&' : '?'}error=${encodeURIComponent('请完成人机验证后再付款。')}`, 303);
+  }
   const origin = url.origin;
   const buyerInput = {
     email: form.get('email'),
