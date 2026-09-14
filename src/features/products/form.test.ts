@@ -26,7 +26,23 @@ describe('parseProductForm', () => {
 
   it('treats an absent checkbox as active=0', () => {
     const r = parseProductForm(form({ name: 'Tee', price: '5', stock: '1' }));
-    if ('data' in r) expect(r.data.active).toBe(0);
+    if ('data' in r) {
+      expect(r.data.active).toBe(0);
+      expect(r.data.collect_email).toBe(0);
+      expect(r.data.collect_name).toBe(0);
+      expect(r.data.collect_virtual_region).toBe(0);
+    }
+  });
+
+  it('parses per-product buyer information switches', () => {
+    const r = parseProductForm(form({
+      name: 'Tee', price: '5', stock: '1', collect_email: 'on', collect_virtual_region: 'on',
+    }));
+    if ('data' in r) {
+      expect(r.data.collect_email).toBe(1);
+      expect(r.data.collect_name).toBe(0);
+      expect(r.data.collect_virtual_region).toBe(1);
+    }
   });
 
   it('rounds fractional cents', () => {

@@ -127,9 +127,9 @@ export function createWaffoProvider(): PaymentProvider {
       const metadata: Record<string, string> = { ...(params.metadata ?? {}) };
       const reservationId = metadata.reservation_id;
 
-      metadata.buyer_email = params.buyer.email.slice(0, 254);
-      metadata.buyer_name = params.buyer.name.slice(0, 120);
-      metadata.virtual_region = params.buyer.virtualRegion.slice(0, 120);
+      if (params.buyer.email) metadata.buyer_email = params.buyer.email.slice(0, 254);
+      if (params.buyer.name) metadata.buyer_name = params.buyer.name.slice(0, 120);
+      if (params.buyer.virtualRegion) metadata.virtual_region = params.buyer.virtualRegion.slice(0, 120);
       if (selectedShipping) {
         metadata.shipping_cents = String(selectedShipping.amountCents);
         metadata.shipping_label = selectedShipping.label.slice(0, 120);
@@ -146,7 +146,7 @@ export function createWaffoProvider(): PaymentProvider {
           currency,
           language: 'zh-Hans',
           priceSnapshot: { amount: displayAmount(chargeableMinor, currency), taxCategory },
-          buyerEmail: params.buyer.email,
+          buyerEmail: params.buyer.email ?? undefined,
           billingDetail: selectedShipping?.address.country ? billingDetail(selectedShipping.address) : undefined,
           successUrl: params.successUrl,
           metadata,

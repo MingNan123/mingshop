@@ -25,7 +25,7 @@ import { MANUAL_WALLET_CHECKOUT_TTL_SECONDS } from '../features/payments/manual-
 import { reserveInventory, releaseInventoryReservation } from '../features/orders/reservations';
 import { reservationItems } from '../features/orders/reservationItems.ts';
 import { purgeStockProductCache } from '../features/cache/purge';
-import { parseBuyerDetails } from '../features/checkout/buyer';
+import { buyerRequirements, parseBuyerDetails } from '../features/checkout/buyer';
 
 const cfg = getConfig();
 const isPost = Astro.request.method === 'POST';
@@ -85,6 +85,7 @@ if (productPublicId) {
 if (lines.length === 0) return Astro.redirect('/cart', 303);
 
 const subtotalCents = lines.reduce((s, l) => s + l.unitPriceCents * l.qty, 0);
+const buyerFields = buyerRequirements(lines.map((line) => line.product));
 const currency = cfg.currency;
 const effectiveShipping = shippingFor(Astro.locals.settings).config;
 const knownCountries = allowedCountries(effectiveShipping);
@@ -123,7 +124,7 @@ let options: { label: string; amountCents: number; pickup?: boolean }[] = [];
 const errors: string[] = [];
 
 if (isPost) {
-  const buyer = parseBuyerDetails({ email: addr.email, name: addr.name, virtual_region: addr.virtualRegion });
+  const buyer = parseBuyerDetails({ email: addr.email, name: addr.name, virtual_region: addr.virtualRegion }, buyerFields);
   if (!buyer) errors.push('请填写有效邮箱、姓名和虚拟地区。');
   if (!addr.line1) errors.push('Address is required.');
   if (!addr.city) errors.push('City is required.');

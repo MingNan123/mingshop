@@ -49,9 +49,9 @@ export interface CreateCheckoutParams {
   automaticTax?: boolean;
   /** Buyer identity collected by minshop before any payment handoff. */
   buyer: {
-    email: string;
-    name: string;
-    virtualRegion: string;
+    email: string | null;
+    name: string | null;
+    virtualRegion: string | null;
   };
   /** When set, collect a shipping address (allowed countries) + offer these rates. */
   shipping?: {

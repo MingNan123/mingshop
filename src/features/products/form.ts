@@ -46,6 +46,9 @@ export function parseProductForm(
   // Unchecked checkboxes submit nothing, so absence means inactive.
   const active = form.get('active') != null ? 1 : 0;
   const requires_shipping = form.get('requires_shipping') != null ? 1 : 0;
+  const collect_email = form.get('collect_email') != null ? 1 : 0;
+  const collect_name = form.get('collect_name') != null ? 1 : 0;
+  const collect_virtual_region = form.get('collect_virtual_region') != null ? 1 : 0;
 
   const parsedWeight = toGrams(String(form.get('weight') ?? ''), unit);
   let weight_grams: number | null = null;
@@ -62,7 +65,7 @@ export function parseProductForm(
   }
 
   return {
-    data: { name, description, price_cents, currency, stock, active, weight_grams, requires_shipping },
+    data: { name, description, price_cents, currency, stock, active, weight_grams, requires_shipping, collect_email, collect_name, collect_virtual_region },
   };
 }
 

@@ -45,7 +45,7 @@ import { lifecycleActive } from '../../features/digitalDelivery/rollout.ts';
 import { mintLightningOrder } from '../../features/payments/lightning-provider';
 import { getLightningBackend } from '../../features/payments/lightning';
 import { clientControlledPriceFields } from '../../features/payments/checkout/priceGuard.ts';
-import { parseBuyerDetails } from '../../features/checkout/buyer.ts';
+import { buyerRequirements, parseBuyerDetails } from '../../features/checkout/buyer.ts';
 
 export const prerender = false;
 
@@ -132,15 +132,11 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
 
   const form = await request.formData();
   const origin = url.origin;
-  const buyer = parseBuyerDetails({
+  const buyerInput = {
     email: form.get('email'),
     name: form.get('name'),
     virtual_region: form.get('virtual_region'),
-  });
-  if (!buyer) {
-    const back = String(request.headers.get('referer') ?? '').includes('/express') ? '/express' : '/cart';
-    return redirect(`${back}?error=${encodeURIComponent('请填写有效邮箱、姓名和虚拟地区。')}`, 303);
-  }
+  };
 
   let lines: LineDraft[] = [];
   let cancelUrl = `${origin}/`;
@@ -213,6 +209,12 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
   }
 
   if (lines.length === 0) return redirect('/cart', 303);
+
+  const requirements = buyerRequirements(lines.map((line) => line.product));
+  const buyer = parseBuyerDetails(buyerInput, requirements);
+  if (!buyer) {
+    return redirect(`${errorPath}?error=${encodeURIComponent('请填写该商品要求的购买信息。')}`, 303);
+  }
 
   // Don't oversell — check the variant's stock (or the product's), not the base.
   const short = lines.find((l) => l.availableStock < l.qty);
@@ -481,10 +483,6 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     return cjson({ error: 'Body must be { "items": [{ "product_id": "prod_…", "quantity": number }] }.' }, 400);
   }
-  const buyer = parseBuyerDetails((body as { buyer?: Record<string, unknown> })?.buyer ?? {});
-  if (!buyer) {
-    return cjson({ error: 'Body needs buyer: { email, name, virtual_region }.' }, 400);
-  }
   const rootPriceFields = clientControlledPriceFields(body);
   if (rootPriceFields.length > 0) {
     return cjson(
@@ -648,6 +646,15 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
       variant,
       extras,
     });
+  }
+
+  const requirements = buyerRequirements(lines.map((line) => line.product));
+  const buyer = parseBuyerDetails(
+    (body as { buyer?: Record<string, unknown> })?.buyer ?? {},
+    requirements,
+  );
+  if (!buyer) {
+    return cjson({ error: 'Buyer information required by one or more products is missing or invalid.', required_buyer_fields: requirements }, 400);
   }
 
   const storeCurrency = cfg.currency;

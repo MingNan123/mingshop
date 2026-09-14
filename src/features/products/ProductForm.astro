@@ -31,6 +31,15 @@ const stablecoinAmount = stablecoinAvailable && price ? `${price} USDC / ${price
         </div>
       </section>
 
+      <section id="buyer-fields" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
+        <div class="mb-4"><h2 class="font-medium">购买信息采集</h2><p class="mt-1 text-xs text-gray-500">只勾选该商品下单时需要客户填写的字段。未勾选的字段不会在结账页显示。</p></div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <label class="flex items-center gap-2 rounded-md border border-line p-3 text-sm"><input name="collect_email" type="checkbox" checked={product?.collect_email === 1} class="h-4 w-4" />邮箱</label>
+          <label class="flex items-center gap-2 rounded-md border border-line p-3 text-sm"><input name="collect_name" type="checkbox" checked={product?.collect_name === 1} class="h-4 w-4" />姓名</label>
+          <label class="flex items-center gap-2 rounded-md border border-line p-3 text-sm"><input name="collect_virtual_region" type="checkbox" checked={product?.collect_virtual_region === 1} class="h-4 w-4" />虚拟地区</label>
+        </div>
+      </section>
+
       <section id="pricing" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
         <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">这里设置商品的固定基础价格。USDC / USDT 会与此后台价格绑定；规格、附加项和运费在此基础上由服务器计算，买家不能在结账时修改金额。</p></div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -61,7 +70,7 @@ const stablecoinAmount = stablecoinAvailable && price ? `${price} USDC / ${price
 
     <aside class="h-fit space-y-4 lg:sticky lg:top-6">
       <section class="rounded-lg border border-line bg-white p-5"><h2 class="font-medium">发布</h2><label class="mt-4 flex items-center gap-2 text-sm"><input name="active" type="checkbox" checked={product ? product.active === 1 : true} class="h-4 w-4" />立即上架到商城</label><p class="mt-2 text-xs text-gray-500">关闭后商品不会在商城公开显示。</p><input type="hidden" name="currency" value={defaultCurrency} /><div class="mt-5 grid gap-2"><button type="submit" class="rounded-md bg-brand px-5 py-2.5 font-medium text-on-brand hover:bg-brand-hover">{submitLabel}</button><a href="/admin/products" class="rounded-md border border-line px-5 py-2.5 text-center hover:bg-surface">取消</a></div></section>
-      {product && <nav class="rounded-lg border border-line bg-white p-4"><p class="mb-2 text-xs font-medium uppercase tracking-widest text-gray-400">快速定位</p><div class="grid gap-1 text-sm"><a href="#basic" class="hover:text-brand">基本信息</a><a href="#pricing" class="hover:text-brand">价格与库存</a>{attachmentActive() && <a href="#shipping" class="hover:text-brand">配送设置</a>}{attachmentActive() && <a href="#digital" class="hover:text-brand">数字商品</a>}<a href="#categories" class="hover:text-brand">商品分类</a><a href="#gallery" class="hover:text-brand">商品图片库</a><a href="#options" class="hover:text-brand">规格与附加选项</a></div></nav>}
+      {product && <nav class="rounded-lg border border-line bg-white p-4"><p class="mb-2 text-xs font-medium uppercase tracking-widest text-gray-400">快速定位</p><div class="grid gap-1 text-sm"><a href="#basic" class="hover:text-brand">基本信息</a><a href="#pricing" class="hover:text-brand">价格与库存</a><a href="#buyer-fields" class="hover:text-brand">购买信息采集</a>{attachmentActive() && <a href="#shipping" class="hover:text-brand">配送设置</a>}{attachmentActive() && <a href="#digital" class="hover:text-brand">数字商品</a>}<a href="#categories" class="hover:text-brand">商品分类</a><a href="#gallery" class="hover:text-brand">商品图片库</a><a href="#options" class="hover:text-brand">规格与附加选项</a></div></nav>}
     </aside>
   </div>
 </form>

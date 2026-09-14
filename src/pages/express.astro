@@ -13,6 +13,7 @@ import { stripeDestination } from '../features/shipping/destination';
 import { readCart, resolveCart } from '../features/cart/cart';
 import { enabledMethods } from '../features/payments';
 import ProductImage from '../features/products/ProductImage.astro';
+import { buyerRequirements } from '../features/checkout/buyer';
 
 const isPost = Astro.request.method === 'POST';
 const form = isPost ? await Astro.request.formData() : null;
@@ -63,6 +64,8 @@ const stablecoinNeedsAddress = effectiveShipping.enabled && shippingRequired;
 const destination = stripeDestination(Astro.locals.settings, effectiveShipping, shippingRequired, Astro.request.headers.get('cf-ipcountry'));
 const heading = isBuyNow ? 'Buy now' : 'Checkout';
 const error = Astro.url.searchParams.get('error');
+const buyerFields = buyerRequirements(weightLines.map((line) => line.product));
+const showBuyerFields = buyerFields.email || buyerFields.name || buyerFields.virtualRegion;
 const METHOD: Record<string, { label: string; hint: string }> = {
   stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more' },
   waffo: { label: 'Pay with Waffo', hint: 'Secure hosted checkout' },
@@ -85,12 +88,12 @@ const METHOD: Record<string, { label: string; hint: string }> = {
     <p class="mt-2 text-xs text-muted">All payment methods use the current product prices saved by the shop. The amount cannot be edited at checkout.</p>
     <form method="POST" action="/api/checkout" class="mt-6 space-y-3">
       {carry.map((c) => <input type="hidden" name={c.name} value={c.value} />)}
-      <div class="space-y-3 rounded-lg border border-line bg-surface p-4">
+      {showBuyerFields && <div class="space-y-3 rounded-lg border border-line bg-surface p-4">
         <p class="text-sm font-medium">购买信息</p>
-        <label class="block text-sm"><span class="mb-1 block text-muted">邮箱</span><input type="email" name="email" required autocomplete="email" class="w-full rounded-md border border-line px-3 py-2" placeholder="用于接收订单和数字商品" /></label>
-        <label class="block text-sm"><span class="mb-1 block text-muted">姓名</span><input type="text" name="name" required autocomplete="name" class="w-full rounded-md border border-line px-3 py-2" /></label>
-        <label class="block text-sm"><span class="mb-1 block text-muted">虚拟地区</span><input type="text" name="virtual_region" required class="w-full rounded-md border border-line px-3 py-2" placeholder="例如：香港、美国、日本" /></label>
-      </div>
+        {buyerFields.email && <label class="block text-sm"><span class="mb-1 block text-muted">邮箱</span><input type="email" name="email" required autocomplete="email" class="w-full rounded-md border border-line px-3 py-2" placeholder="用于接收订单和数字商品" /></label>}
+        {buyerFields.name && <label class="block text-sm"><span class="mb-1 block text-muted">姓名</span><input type="text" name="name" required autocomplete="name" class="w-full rounded-md border border-line px-3 py-2" /></label>}
+        {buyerFields.virtualRegion && <label class="block text-sm"><span class="mb-1 block text-muted">虚拟地区</span><input type="text" name="virtual_region" required class="w-full rounded-md border border-line px-3 py-2" placeholder="例如：香港、美国、日本" /></label>}
+      </div>}
       {destination.showSelect && <label class="flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">配送国家/地区<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}
       {destination.hiddenOnly && <input type="hidden" name="country" value={destination.countries[0]} />}
       <div class="space-y-2">{methods.map((m, i) => {
