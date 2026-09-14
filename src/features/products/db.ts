@@ -8,12 +8,13 @@ export interface Product {
   file_key: string | null; file_name: string | null; file_mime: string | null; file_size_bytes: number | null;
   related_ids: string | null; billing_interval: 'month' | 'year' | null; created_at: string;
   collect_email?: number; collect_name?: number; collect_virtual_region?: number;
+  sold?: number;
 }
 export interface ProductFields { name: string; description: string | null; price_cents: number; currency: string; stock: number; active: number; weight_grams: number | null; requires_shipping: number; collect_email: number; collect_name: number; collect_virtual_region: number; }
 export interface ProductInput extends ProductFields { image_key: string | null; slug: string; }
 
 export async function listProducts(db: D1Database, limit: number, offset = 0, orderBy = 'created_at DESC'): Promise<Product[]> {
-  const { results } = await db.prepare(`SELECT * FROM products WHERE active = 1 ORDER BY ${orderBy} LIMIT ? OFFSET ?`).bind(limit, offset).all<Product>(); return results ?? [];
+  const { results } = await db.prepare(`SELECT p.*, COALESCE((SELECT SUM(oi.quantity) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.product_id = p.id AND o.status = 'paid'), 0) AS sold FROM products p WHERE p.active = 1 ORDER BY ${orderBy} LIMIT ? OFFSET ?`).bind(limit, offset).all<Product>(); return results ?? [];
 }
 export async function countProducts(db: D1Database): Promise<number> { const row = await db.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1').first<{ n: number }>(); return row?.n ?? 0; }
 export interface AdminProduct extends Product { sold: number; }

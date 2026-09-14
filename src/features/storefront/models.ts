@@ -23,6 +23,8 @@ export interface ProductCardModel {
   image: StorefrontImage;
   formattedPrice: string;
   inStock: boolean;
+  stock: number;
+  sold: number;
   /** Subscription interval metadata; absent/null means one-time. */
   billingInterval: 'month' | 'year' | null;
 }

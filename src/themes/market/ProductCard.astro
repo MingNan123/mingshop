@@ -22,11 +22,6 @@ const Heading = headingLevel;
       />
       <div class="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
         <div class="flex flex-wrap gap-2">
-          {card.billingInterval && (
-            <span class="rounded-full bg-white/92 px-3 py-1.5 text-[11px] font-semibold text-[color:var(--color-ink)] shadow-sm backdrop-blur">
-              {card.billingInterval === 'year' ? '年度订阅' : '每月订阅'}
-            </span>
-          )}
           {!card.inStock && (
             <span class="rounded-full bg-[color:var(--color-ink)] px-3 py-1.5 text-[11px] font-semibold text-white">暂时售罄</span>
           )}
@@ -42,10 +37,16 @@ const Heading = headingLevel;
       <p class="mt-2 line-clamp-2 text-[13px] leading-6 text-[color:var(--market-muted)]">{card.description ?? '数字化效率工具，开箱即用。'}</p>
 
       <div class="mt-auto flex items-end justify-between gap-3 pt-6">
-        <div>
+        <div class="flex min-w-0 items-end gap-4">
+          <div class="shrink-0">
           <span class="text-2xl font-semibold tracking-[-0.04em]">{card.formattedPrice}</span>
           {card.billingInterval === 'month' && <span class="ml-1 text-[12px] text-[color:var(--market-muted)]">/ 月</span>}
           {card.billingInterval === 'year' && <span class="ml-1 text-[12px] text-[color:var(--market-muted)]">/ 年</span>}
+          </div>
+          <div class="flex gap-3 whitespace-nowrap pb-0.5 text-[11px] text-[color:var(--market-muted)]">
+            <span>库存 <strong class="font-semibold text-[color:var(--color-ink)]">{card.stock}</strong></span>
+            <span>已售 <strong class="font-semibold text-[color:var(--color-ink)]">{card.sold}</strong></span>
+          </div>
         </div>
         <span class="inline-flex h-9 items-center gap-1 rounded-full bg-[color:var(--color-ink)] px-4 text-[11px] font-semibold text-white transition group-hover:bg-[color:var(--color-brand)]">
           {card.inStock ? '查看产品' : '查看详情'} <span class="transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>

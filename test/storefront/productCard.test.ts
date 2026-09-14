@@ -55,17 +55,14 @@ describe('buildProductCard', () => {
     expect(() => cardFor(product({ public_id: null }))).toThrow(/no public_id/);
   });
 
-  it('reports availability as a boolean, never a count', () => {
+  it('reports availability together with stock and paid sales counts', () => {
     expect(cardFor(product({ stock: 7 })).inStock).toBe(true);
     expect(cardFor(product({ stock: 3 })).inStock).toBe(true); // low, still purchasable
     expect(cardFor(product({ stock: 0 })).inStock).toBe(false);
 
-    // The quantity must not survive into the model in any form. Asserted on the
-    // shape rather than the serialized string: public IDs contain digits, so a
-    // substring check quietly matches the wrong thing.
-    const card = cardFor(product({ stock: 7 }));
-    expect(Object.keys(card)).not.toContain('stock');
-    expect(Object.values(card)).not.toContain(7);
+    const card = cardFor(product({ stock: 7, sold: 12 }));
+    expect(card.stock).toBe(7);
+    expect(card.sold).toBe(12);
   });
 
   it('resolves original delivery to a plain URL with no ladder', () => {
@@ -113,19 +110,14 @@ describe('the store-owned product card', () => {
     expect(html).toContain('$24.00');
   });
 
-  it('never publishes a stock count, in or out of stock', async () => {
-    // Deliberately NOT asserting the words "Sold out" or an opacity class: this
-    // suite has to pass for a redesign that rewords and restyles everything.
-    // The default template's exact copy is pinned by the extraction baselines.
+  it('shows stock and paid sales counts', async () => {
     const soldOut = await render(ProductCard, cardFor(product({ stock: 0 })));
-    const inStock = await render(ProductCard, cardFor(product({ stock: 7 })));
+    const inStock = await render(ProductCard, cardFor(product({ stock: 7, sold: 12 })));
 
-    for (const html of [soldOut, inStock]) {
-      expect(html).not.toMatch(/\b7 (left|remaining|in stock)\b/i);
-      expect(html).not.toMatch(/data-stock=/);
-    }
-    // Availability must still be *expressible* — the two states cannot render
-    // identically, or a shopper cannot tell them apart.
+    expect(inStock).toContain('库存');
+    expect(inStock).toContain('>7<');
+    expect(inStock).toContain('已售');
+    expect(inStock).toContain('>12<');
     expect(soldOut).not.toBe(inStock);
   });
 
