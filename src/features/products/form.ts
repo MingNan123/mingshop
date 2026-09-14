@@ -38,6 +38,11 @@ export function parseProductForm(
   if (!Number.isInteger(stock) || stock < 0) {
     return { error: 'Stock must be a non-negative whole number.' };
   }
+  const display_stock = Number(String(form.get('display_stock') ?? '0').trim());
+  const display_sold = Number(String(form.get('display_sold') ?? '0').trim());
+  if (!Number.isInteger(display_stock) || display_stock < 0 || !Number.isInteger(display_sold) || display_sold < 0) {
+    return { error: 'Storefront stock and sold counts must be non-negative whole numbers.' };
+  }
 
   const currency = String(form.get('currency') ?? 'usd').trim().toLowerCase() || 'usd';
   // Scale by the chosen currency's minor units (so 1000 JPY stores as 1000, not 100000).
@@ -65,7 +70,7 @@ export function parseProductForm(
   }
 
   return {
-    data: { name, description, price_cents, currency, stock, active, weight_grams, requires_shipping, collect_email, collect_name, collect_virtual_region },
+    data: { name, description, price_cents, currency, stock, display_stock, display_sold, active, weight_grams, requires_shipping, collect_email, collect_name, collect_virtual_region },
   };
 }
 

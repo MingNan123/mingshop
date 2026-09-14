@@ -29,8 +29,8 @@ export function buildProductCard(product: Product, options: ProductCardOptions):
     image: buildStorefrontImage(product.image_key, product.name, options),
     formattedPrice: formatMoney(product.price_cents, options.currency),
     inStock: stockState(product.stock) !== 'out',
-    stock: product.stock,
-    sold: product.sold ?? 0,
+    displayStock: product.display_stock ?? product.stock,
+    displaySold: product.display_sold ?? product.sold ?? 0,
     billingInterval: product.billing_interval ?? null,
   };
 }

@@ -60,9 +60,9 @@ describe('buildProductCard', () => {
     expect(cardFor(product({ stock: 3 })).inStock).toBe(true); // low, still purchasable
     expect(cardFor(product({ stock: 0 })).inStock).toBe(false);
 
-    const card = cardFor(product({ stock: 7, sold: 12 }));
-    expect(card.stock).toBe(7);
-    expect(card.sold).toBe(12);
+    const card = cardFor(product({ stock: 7, sold: 12, display_stock: 88, display_sold: 25 }));
+    expect(card.displayStock).toBe(88);
+    expect(card.displaySold).toBe(25);
   });
 
   it('resolves original delivery to a plain URL with no ladder', () => {
@@ -112,12 +112,12 @@ describe('the store-owned product card', () => {
 
   it('shows stock and paid sales counts', async () => {
     const soldOut = await render(ProductCard, cardFor(product({ stock: 0 })));
-    const inStock = await render(ProductCard, cardFor(product({ stock: 7, sold: 12 })));
+    const inStock = await render(ProductCard, cardFor(product({ stock: 7, sold: 12, display_stock: 88, display_sold: 25 })));
 
     expect(inStock).toContain('库存');
-    expect(inStock).toContain('>7<');
+    expect(inStock).toContain('>88<');
     expect(inStock).toContain('已售');
-    expect(inStock).toContain('>12<');
+    expect(inStock).toContain('>25<');
     expect(soldOut).not.toBe(inStock);
   });
 

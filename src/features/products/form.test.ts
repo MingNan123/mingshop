@@ -19,6 +19,8 @@ describe('parseProductForm', () => {
       expect(r.data.name).toBe('Tee');
       expect(r.data.price_cents).toBe(2500);
       expect(r.data.stock).toBe(10);
+      expect(r.data.display_stock).toBe(0);
+      expect(r.data.display_sold).toBe(0);
       expect(r.data.currency).toBe('usd');
       expect(r.data.active).toBe(1);
     }
@@ -42,6 +44,17 @@ describe('parseProductForm', () => {
       expect(r.data.collect_email).toBe(1);
       expect(r.data.collect_name).toBe(0);
       expect(r.data.collect_virtual_region).toBe(1);
+    }
+  });
+
+  it('parses editable storefront stock and sold counts separately from real stock', () => {
+    const r = parseProductForm(form({
+      name: 'Tee', price: '5', stock: '3', display_stock: '88', display_sold: '25',
+    }));
+    if ('data' in r) {
+      expect(r.data.stock).toBe(3);
+      expect(r.data.display_stock).toBe(88);
+      expect(r.data.display_sold).toBe(25);
     }
   });
 

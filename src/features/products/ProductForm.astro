@@ -41,10 +41,13 @@ const stablecoinAmount = stablecoinAvailable && price ? `${price} USDC / ${price
       </section>
 
       <section id="pricing" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
-        <div class="mb-5"><h2 class="font-medium">价格与库存</h2><p class="mt-1 text-xs text-gray-500">这里设置商品的固定基础价格。USDC / USDT 会与此后台价格绑定；规格、附加项和运费在此基础上由服务器计算，买家不能在结账时修改金额。</p></div>
+        <div class="mb-5"><h2 class="font-medium">价格、真实数据与前台展示</h2><p class="mt-1 text-xs text-gray-500">真实库存用于控制商品能否购买，真实已售按已付款订单自动统计，仅后台可见；前台展示数字可手动编辑，客户会在商品卡片上看到。</p></div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div><label class="block text-sm font-medium" for="price">固定价格（{defaultCurrency.toUpperCase()}）</label><input id="price" name="price" type="number" step={priceStep} min="0" required value={price} data-stablecoin-price data-decimals={priceDecimals} data-stablecoin={stablecoinAvailable ? 'true' : 'false'} class={inputClass} /><p class="mt-1 text-xs text-gray-500">保存后作为 USDC / USDT 的统一固定收款金额。</p>{stablecoinAvailable && <p data-stablecoin-binding class:list={['mt-2 rounded-md border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-gray-600', !stablecoinAmount && 'hidden']}>当前绑定金额：<strong data-stablecoin-amount>{stablecoinAmount}</strong></p>}</div>
-          <div><label class="block text-sm font-medium" for="stock">库存</label><input id="stock" name="stock" type="number" step="1" min="0" value={product?.stock ?? 0} class={inputClass} /></div>
+          <div><label class="block text-sm font-medium" for="stock">真实库存 <span class="text-red-600">（仅后台，控制购买）</span></label><input id="stock" name="stock" type="number" step="1" min="0" value={product?.stock ?? 0} class={inputClass} /><p class="mt-1 text-xs text-gray-500">订单和库存扣减使用此数字，客户看不到。</p></div>
+          <div class="rounded-md border border-blue-200 bg-blue-50 p-3"><label class="block text-sm font-medium text-blue-900" for="display_stock">前台展示库存 <span class="text-blue-700">（可编辑，客户可见）</span></label><input id="display_stock" name="display_stock" type="number" step="1" min="0" value={product?.display_stock ?? product?.stock ?? 0} class={inputClass} /><p class="mt-1 text-xs text-blue-700">只负责页面展示，不影响实际购买和库存扣减。</p></div>
+          <div class="rounded-md border border-blue-200 bg-blue-50 p-3"><label class="block text-sm font-medium text-blue-900" for="display_sold">前台展示已售 <span class="text-blue-700">（可编辑，客户可见）</span></label><input id="display_sold" name="display_sold" type="number" step="1" min="0" value={product?.display_sold ?? product?.sold ?? 0} class={inputClass} /><p class="mt-1 text-xs text-blue-700">客户看到此数字，可随时手动修改。</p></div>
+          <div class="rounded-md border border-gray-200 bg-gray-50 p-3 sm:col-span-2"><p class="text-sm font-medium">真实已售（仅后台、自动统计）</p><p class="mt-1 text-2xl font-semibold tabular-nums">{product?.sold ?? 0}</p><p class="mt-1 text-xs text-gray-500">来自已完成付款的订单，不能手动修改，也不会直接展示给客户。</p></div>
         </div>
       </section>
 

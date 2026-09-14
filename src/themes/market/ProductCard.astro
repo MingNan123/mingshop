@@ -44,8 +44,8 @@ const Heading = headingLevel;
           {card.billingInterval === 'year' && <span class="ml-1 text-[12px] text-[color:var(--market-muted)]">/ 年</span>}
           </div>
           <div class="flex gap-3 whitespace-nowrap pb-0.5 text-[11px] text-[color:var(--market-muted)]">
-            <span>库存 <strong class="font-semibold text-[color:var(--color-ink)]">{card.stock}</strong></span>
-            <span>已售 <strong class="font-semibold text-[color:var(--color-ink)]">{card.sold}</strong></span>
+            <span>库存 <strong class="font-semibold text-[color:var(--color-ink)]">{card.displayStock}</strong></span>
+            <span>已售 <strong class="font-semibold text-[color:var(--color-ink)]">{card.displaySold}</strong></span>
           </div>
         </div>
         <span class="inline-flex h-9 items-center gap-1 rounded-full bg-[color:var(--color-ink)] px-4 text-[11px] font-semibold text-white transition group-hover:bg-[color:var(--color-brand)]">
