@@ -45,6 +45,7 @@ import { lifecycleActive } from '../../features/digitalDelivery/rollout.ts';
 import { mintLightningOrder } from '../../features/payments/lightning-provider';
 import { getLightningBackend } from '../../features/payments/lightning';
 import { clientControlledPriceFields } from '../../features/payments/checkout/priceGuard.ts';
+import { parseBuyerDetails } from '../../features/checkout/buyer.ts';
 
 export const prerender = false;
 
@@ -131,6 +132,15 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
 
   const form = await request.formData();
   const origin = url.origin;
+  const buyer = parseBuyerDetails({
+    email: form.get('email'),
+    name: form.get('name'),
+    virtual_region: form.get('virtual_region'),
+  });
+  if (!buyer) {
+    const back = String(request.headers.get('referer') ?? '').includes('/express') ? '/express' : '/cart';
+    return redirect(`${back}?error=${encodeURIComponent('请填写有效邮箱、姓名和虚拟地区。')}`, 303);
+  }
 
   let lines: LineDraft[] = [];
   let cancelUrl = `${origin}/`;
@@ -404,6 +414,7 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
       shipping,
       allowPromotionCodes: settings.discountsEnabled ?? cfg.discounts.enabled,
       automaticTax: settings.taxEnabled ?? cfg.tax.enabled,
+      buyer,
       orderItemsJson: JSON.stringify(
         lines.map((l) => ({ id: l.product.id, q: l.qty, n: l.name, p: l.unitPriceCents, v: l.variantId })),
       ),
@@ -469,6 +480,10 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   const rawItems = (body as { items?: unknown })?.items;
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     return cjson({ error: 'Body must be { "items": [{ "product_id": "prod_…", "quantity": number }] }.' }, 400);
+  }
+  const buyer = parseBuyerDetails((body as { buyer?: Record<string, unknown> })?.buyer ?? {});
+  if (!buyer) {
+    return cjson({ error: 'Body needs buyer: { email, name, virtual_region }.' }, 400);
   }
   const rootPriceFields = clientControlledPriceFields(body);
   if (rootPriceFields.length > 0) {
@@ -929,6 +944,7 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
         }),
       allowPromotionCodes: jsonSettings.discountsEnabled ?? cfg.discounts.enabled,
       automaticTax: jsonSettings.taxEnabled ?? cfg.tax.enabled,
+      buyer,
       orderItemsJson: JSON.stringify(
         lines.map((l) => ({ id: l.product.id, q: l.qty, n: l.name, p: l.unitPriceCents, v: l.variantId })),
       ),

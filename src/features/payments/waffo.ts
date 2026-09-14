@@ -127,6 +127,9 @@ export function createWaffoProvider(): PaymentProvider {
       const metadata: Record<string, string> = { ...(params.metadata ?? {}) };
       const reservationId = metadata.reservation_id;
 
+      metadata.buyer_email = params.buyer.email.slice(0, 254);
+      metadata.buyer_name = params.buyer.name.slice(0, 120);
+      metadata.virtual_region = params.buyer.virtualRegion.slice(0, 120);
       if (selectedShipping) {
         metadata.shipping_cents = String(selectedShipping.amountCents);
         metadata.shipping_label = selectedShipping.label.slice(0, 120);
@@ -143,7 +146,7 @@ export function createWaffoProvider(): PaymentProvider {
           currency,
           language: 'zh-Hans',
           priceSnapshot: { amount: displayAmount(chargeableMinor, currency), taxCategory },
-          buyerEmail: selectedShipping?.email ?? undefined,
+          buyerEmail: params.buyer.email,
           billingDetail: selectedShipping?.address.country ? billingDetail(selectedShipping.address) : undefined,
           successUrl: params.successUrl,
           metadata,
@@ -211,13 +214,21 @@ export function createWaffoProvider(): PaymentProvider {
           providerSessionId,
           publicId: reservationId,
           reservationId,
-          email: buyerEmail,
+          email: buyerEmail ?? metadata.buyer_email ?? null,
           amountTotalCents: Math.round(amount * 10 ** decimals),
           shippingCents,
           shippingLabel: metadata.shipping_label ?? null,
           shippingWeightGrams,
           deliveryMethod: metadata.delivery_method === 'pickup' || metadata.delivery_method === 'shipping' ? metadata.delivery_method : null,
-          shippingAddress,
+          shippingAddress: shippingAddress ?? {
+            name: metadata.buyer_name ?? null,
+            line1: null,
+            line2: null,
+            city: null,
+            state: null,
+            postal: null,
+            country: metadata.virtual_region ?? null,
+          },
           taxCents: Math.round(taxAmount * 10 ** decimals),
           currency,
           paymentMethod: 'waffo',

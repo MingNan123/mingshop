@@ -86,6 +86,12 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
           ) : (
             <form method="POST" action="/api/checkout" class="mt-4 space-y-2">
               <input type="hidden" name="source" value="cart" />
+              <div class="space-y-3 rounded-lg border border-line bg-surface p-4">
+                <p class="text-sm font-medium">购买信息</p>
+                <label class="block text-sm"><span class="mb-1 block text-muted">邮箱</span><input type="email" name="email" required autocomplete="email" class="w-full rounded-md border border-line px-3 py-2" placeholder="用于接收订单和数字商品" /></label>
+                <label class="block text-sm"><span class="mb-1 block text-muted">姓名</span><input type="text" name="name" required autocomplete="name" class="w-full rounded-md border border-line px-3 py-2" /></label>
+                <label class="block text-sm"><span class="mb-1 block text-muted">虚拟地区</span><input type="text" name="virtual_region" required class="w-full rounded-md border border-line px-3 py-2" placeholder="例如：香港、美国、日本" /></label>
+              </div>
               {destination.showSelect && <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">Ship to<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}
               {destination.hiddenOnly && <input type="hidden" name="country" value={destination.countries[0]} />}
               {methodRows.map(({ m, ready, primary }) => ready ? (

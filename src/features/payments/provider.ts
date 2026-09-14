@@ -47,6 +47,12 @@ export interface CreateCheckoutParams {
   allowPromotionCodes?: boolean;
   /** Compute sales tax / VAT via Stripe Tax (requires Stripe Tax activated). */
   automaticTax?: boolean;
+  /** Buyer identity collected by minshop before any payment handoff. */
+  buyer: {
+    email: string;
+    name: string;
+    virtualRegion: string;
+  };
   /** When set, collect a shipping address (allowed countries) + offer these rates. */
   shipping?: {
     addressCountries: string[];
