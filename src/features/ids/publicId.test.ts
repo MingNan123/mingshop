@@ -51,8 +51,11 @@ describe('parsePublicId', () => {
   it('rejects wrong lengths and invalid characters', () => {
     expect(parsePublicId('prod_k7m2qx8vn', 'product')).toBeNull(); // 9
     expect(parsePublicId('prod_k7m2qx8vn6t', 'product')).toBeNull(); // 11
-    expect(parsePublicId('prod_k7m2qxlvn6', 'product')).toBeNull(); // 'l' excluded
-    expect(parsePublicId('prod_k7m2qx8vni', 'product')).toBeNull(); // 'i' excluded
+    // Imported legacy products may contain letters excluded by Crockford base32.
+    expect(parsePublicId('prod_6coca8qrst', 'product')).toBe('prod_6coca8qrst');
+    expect(parsePublicId('prod_k7m2qxlvn6', 'product')).toBe('prod_k7m2qxlvn6');
+    // The relaxed compatibility rule is product-only.
+    expect(parsePublicId('var_k7m2qxlvn6', 'variant')).toBeNull();
     expect(parsePublicId(42 as unknown, 'product')).toBeNull();
     expect(parsePublicId('42', 'product')).toBeNull();
   });

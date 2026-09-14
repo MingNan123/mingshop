@@ -34,6 +34,12 @@ export const PUBLIC_ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
 export const PUBLIC_ID_TOKEN_LENGTH = 10;
 
 const TOKEN_RE = /^[0-9abcdefghjkmnpqrstvwxyz]{10}$/;
+// A small batch of products was imported with human-readable 10-character
+// tokens before the Crockford restriction was enforced (for example `coca`).
+// They remain permanent external identifiers, so product routes must continue
+// to resolve them. New IDs are still generated exclusively from the alphabet
+// above; the compatibility shape is deliberately product-only.
+const LEGACY_PRODUCT_TOKEN_RE = /^[0-9a-z]{10}$/;
 
 /** 256 is divisible by 32, so masking a random byte to 5 bits stays uniform. */
 export function generatePublicId(kind: PublicIdKind): string {
@@ -55,7 +61,7 @@ export function parsePublicId(value: unknown, kind: PublicIdKind): string | null
   const prefix = `${PUBLIC_ID_PREFIXES[kind]}_`;
   if (!normalized.startsWith(prefix)) return null;
   const token = normalized.slice(prefix.length);
-  if (!TOKEN_RE.test(token)) return null;
+  if (!TOKEN_RE.test(token) && !(kind === 'product' && LEGACY_PRODUCT_TOKEN_RE.test(token))) return null;
   return normalized;
 }
 
