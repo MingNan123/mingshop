@@ -1742,15 +1742,15 @@ const sections = [
       </div>
 
       <label class="flex max-w-md flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
-        Admin recovery email
+        管理员找回邮箱
         <input
           type="email"
           name="admin_recovery_email"
-          value={settings.adminRecoveryEmail ?? ''}
+          value={settings.adminRecoveryEmail ?? email.notifyRecipients[0] ?? ''}
           placeholder="you@example.com"
           class="w-72 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
         />
-        <span class="normal-case tracking-normal">Receives secure links for resetting the admin password. Keep this address private and up to date.</span>
+        <span class="normal-case tracking-normal">接收后台密码重置链接；未单独设置时，自动使用第一条新订单提醒邮箱。</span>
       </label>
 
       {/* Resend API key — shown only for the Resend provider. JS toggles it live as
