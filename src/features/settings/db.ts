@@ -16,7 +16,7 @@ export type SettingKey =
   | 'ship_from' | 'parcel_default' | 'admin_password_hash' | 'email_enabled'
   | 'email_provider' | 'logo_image_key' | 'home_page' | 'announcement'
   | 'announcement_href' | 'email_from' | 'store_url' | 'email_from_name'
-  | 'email_notify_to' | 'turnstile_enabled' | 'turnstile_site_key'
+  | 'email_notify_to' | 'admin_recovery_email' | 'turnstile_enabled' | 'turnstile_site_key'
   | 'payment_provider' | 'lightning_backend' | 'lnbits_url' | 'phoenixd_url'
   | 'opennode_api_url' | 'alipay_payment_url' | 'wechatpay_payment_url'
   | 'usdc_address' | 'usdc_network' | 'usdt_address' | 'usdt_network'
@@ -30,7 +30,7 @@ export interface StoreSettings {
   disabledPaymentMethods: string[]; cartEnabled: boolean; buyNowEnabled: boolean; searchProvider: 'fts' | 'vector' | null;
   configuredSecrets: string[]; emailEnabled: boolean; emailProvider: 'resend' | 'cloudflare'; logoImageKey: string | null;
   homePage: string | null; announcement: string | null; announcementHref: string | null; emailFrom: string | null;
-  emailFromName: string | null; emailNotifyTo: string | null; discountsEnabled: boolean | null; taxEnabled: boolean | null;
+  emailFromName: string | null; emailNotifyTo: string | null; adminRecoveryEmail: string | null; discountsEnabled: boolean | null; taxEnabled: boolean | null;
   accountsEnabled: boolean | null; imageOptimize: boolean | null; imageDelivery: 'original' | 'cloudflare'; shippingEnabled: boolean | null;
   shippingConfig: ParsedRuntimeShippingConfig; weightUnit: WeightUnit; turnstileEnabled: boolean; turnstileSiteKey: string | null;
   paymentProvider: StoredPaymentProvider; lightningBackend: 'phoenixd' | 'lnbits'; lnbitsUrl: string | null; phoenixdUrl: string | null;
@@ -104,7 +104,8 @@ export function parseStoreSettings(results: Array<{ key: string; value: string }
     emailEnabled: map.get('email_enabled') !== '0', emailProvider: map.get('email_provider') === 'cloudflare' ? 'cloudflare' : 'resend',
     logoImageKey: map.get('logo_image_key') ?? null, homePage: map.get('home_page') ?? null, announcement: map.get('announcement') ?? null,
     announcementHref: map.get('announcement_href') ?? null, emailFrom: map.get('email_from') ?? null, emailFromName: map.get('email_from_name') ?? null,
-    emailNotifyTo: map.get('email_notify_to') ?? null, discountsEnabled: map.get('discounts_enabled') == null ? null : map.get('discounts_enabled') === '1',
+    emailNotifyTo: map.get('email_notify_to') ?? null, adminRecoveryEmail: map.get('admin_recovery_email') ?? null,
+    discountsEnabled: map.get('discounts_enabled') == null ? null : map.get('discounts_enabled') === '1',
     taxEnabled: map.get('tax_enabled') == null ? null : map.get('tax_enabled') === '1', accountsEnabled: map.get('accounts_enabled') == null ? null : map.get('accounts_enabled') === '1',
     imageOptimize: map.get('image_optimize') == null ? null : map.get('image_optimize') === '1', imageDelivery: map.get('image_delivery') === 'cloudflare' ? 'cloudflare' : 'original',
     shippingEnabled: map.get('shipping_enabled') == null ? null : map.get('shipping_enabled') === '1', shippingConfig: parseRuntimeShippingConfig(map.get('shipping_config')),

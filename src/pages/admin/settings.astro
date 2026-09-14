@@ -460,10 +460,14 @@ if (Astro.request.method === 'POST') {
     await setSetting(env.DB, 'email_from', String(form.get('email_from') ?? '').trim() || null);
     await setSetting(env.DB, 'email_from_name', String(form.get('email_from_name') ?? '').trim() || null);
     const notify = normalizeEmailRecipients(form.getAll('email_notify_to'));
+    const recoveryEmail = String(form.get('admin_recovery_email') ?? '').trim().toLowerCase();
     if (notify.invalid.length) {
       validationError = `Fix invalid notification email: ${notify.invalid[0]}`;
+    } else if (recoveryEmail && !/^\S+@\S+\.\S+$/.test(recoveryEmail)) {
+      validationError = 'Fix the invalid admin recovery email.';
     } else {
       await setSetting(env.DB, 'email_notify_to', serializeEmailRecipients(notify.recipients) || null);
+      await setSetting(env.DB, 'admin_recovery_email', recoveryEmail || null);
     }
     await applySecrets(['resend_api_key']);
     const ready =
@@ -1736,6 +1740,18 @@ const sections = [
           }
         </div>
       </div>
+
+      <label class="flex max-w-md flex-col gap-1 text-xs uppercase tracking-widest text-gray-400">
+        Admin recovery email
+        <input
+          type="email"
+          name="admin_recovery_email"
+          value={settings.adminRecoveryEmail ?? ''}
+          placeholder="you@example.com"
+          class="w-72 max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm normal-case tracking-normal text-gray-900 focus:border-brand focus:outline-none"
+        />
+        <span class="normal-case tracking-normal">Receives secure links for resetting the admin password. Keep this address private and up to date.</span>
+      </label>
 
       {/* Resend API key — shown only for the Resend provider. JS toggles it live as
           the dropdown changes; the SSR `hidden` reflects the saved provider. */}
