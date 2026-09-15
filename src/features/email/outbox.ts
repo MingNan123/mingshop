@@ -100,11 +100,15 @@ export async function deliverOrderNotifications(
     try {
       const emailer = await getEmailProvider(s);
       if (!emailer) {
-        if (isGuestLinkReissueKind(kind)) {
+        if (s.emailEnabled || isGuestLinkReissueKind(kind)) {
           // A reissue already killed the old links — its email is a CREDENTIAL
           // delivery, so a temporarily unconfigured provider is a retryable
           // failure (sweep picks it up), never a terminal skip. Reissue also
           // refuses up front when email is off, so this is the rare race.
+          // The same retry rule applies whenever email is enabled but its
+          // provider is temporarily unavailable (missing binding, vault read,
+          // or rolling configuration). Silently skipping would permanently
+          // discard a paid-order receipt even after the provider recovers.
           await markFailed(db, orderId, kind, attempts, 'Email provider unavailable');
           continue;
         }

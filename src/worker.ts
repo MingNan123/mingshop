@@ -7,6 +7,7 @@ import {
 } from './features/orders/reservations';
 import { getSetting } from './features/settings/db';
 import { sweepStablecoinPayments } from './features/payments/stablecoin-watcher';
+import { scheduledOrigin } from './features/http/origin';
 
 async function releaseExpiredUsdtReservations(): Promise<void> {
   const { results } = await env.DB.prepare(
@@ -22,7 +23,7 @@ async function releaseExpiredUsdtReservations(): Promise<void> {
 
 async function runScheduledSweeps(): Promise<void> {
   const db = env.DB;
-  const origin = await getSetting(db, 'store_url');
+  const origin = scheduledOrigin(env.CANONICAL_ORIGIN, await getSetting(db, 'store_url'));
 
   // Verify chain payments before releasing expired inventory. A transfer that
   // landed near the end of a reservation window must get a chance to settle first.
