@@ -131,6 +131,7 @@ function fakeDb(rows: Row[]): D1Database {
 }
 
 const SETTINGS = {
+  emailEnabled: true,
   emailNotifyTo: 'owner@example.com',
   storeName: 'Test Shop',
   imageDelivery: 'original',
@@ -201,8 +202,28 @@ describe('deliverOrderNotifications', () => {
   it('skips both when email is disabled, without consuming retries as failures', async () => {
     vi.mocked(getEmailProvider).mockResolvedValue(null);
     const rows = freshRows();
-    await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
+    await deliverOrderNotifications(
+      fakeDb(rows),
+      7,
+      'https://x',
+      { ...SETTINGS, emailEnabled: false } as never,
+    );
     expect(rows.map((r) => r.state)).toEqual(['skipped', 'skipped']);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('retries instead of permanently skipping when enabled email is temporarily unavailable', async () => {
+    vi.mocked(getEmailProvider).mockResolvedValue(null);
+    const rows = freshRows();
+    await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        state: 'pending', attempts: 1, last_error: 'Email provider unavailable',
+      }),
+      expect.objectContaining({
+        state: 'pending', attempts: 1, last_error: 'Email provider unavailable',
+      }),
+    ]);
     expect(send).not.toHaveBeenCalled();
   });
 
