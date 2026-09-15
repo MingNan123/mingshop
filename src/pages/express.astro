@@ -69,12 +69,12 @@ const buyerFields = buyerRequirements(weightLines.map((line) => line.product));
 const showBuyerFields = buyerFields.email || buyerFields.name || buyerFields.virtualRegion;
 const METHOD: Record<string, { label: string; hint: string }> = {
   stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more' },
-  waffo: { label: 'Pay with Waffo', hint: '支持微信支付、银行卡、Apple Pay、Google Pay（以收银台实际显示为准）' },
+  waffo: { label: 'Pay with Waffo', hint: '微信支付 · 银行卡 · Apple Pay · Google Pay' },
   lightning: { label: 'Pay with Lightning ⚡', hint: 'Instant — fixed shop amount' },
   opennode: { label: 'Pay with Bitcoin', hint: 'On-chain or Lightning (OpenNode)' },
   alipay: { label: 'Pay with Alipay', hint: 'Fixed amount from product pricing' },
   wechatpay: { label: 'Pay with WeChat Pay', hint: 'Fixed amount from product pricing' },
-  usdc: { label: 'USDC 支付（推荐）', hint: 'Fixed amount · automatically confirmed on-chain' },
+  usdc: { label: 'USDC 支付', hint: '按页面金额转账，到账后自动确认' },
   usdt: { label: 'Pay with USDT', hint: 'Fixed amount · automatically confirmed on-chain' },
 };
 ---
@@ -97,11 +97,10 @@ const METHOD: Record<string, { label: string; hint: string }> = {
       </div>}
       {destination.showSelect && <label class="flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">配送国家/地区<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}
       {destination.hiddenOnly && <input type="hidden" name="country" value={destination.countries[0]} />}
-      {methods.includes('usdc') && <p class="rounded-lg border border-brand bg-surface p-3 text-sm font-semibold text-brand">请优先使用 USDC 支付</p>}
       <CheckoutTurnstile />
       <div class="space-y-2">{methods.map((m, i) => {
       const stablecoinAddressStep = (m === 'usdc' || m === 'usdt') && stablecoinNeedsAddress;
-      return <button type="submit" name="method" value={m} formaction={stablecoinAddressStep ? '/checkout' : '/api/checkout'} formmethod={stablecoinAddressStep ? 'GET' : 'POST'} class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${i === 0 ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}><span><span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span><span class={`block text-xs ${i === 0 ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={i === 0 ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span></button>;
+      return <button type="submit" name="method" value={m} formaction={stablecoinAddressStep ? '/checkout' : '/api/checkout'} formmethod={stablecoinAddressStep ? 'GET' : 'POST'} class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${i === 0 ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}><span><span class="flex flex-wrap items-center gap-2 text-sm font-medium">{METHOD[m]?.label ?? m}{m === 'usdc' && <span class={`rounded-full px-2 py-0.5 text-[10px] font-medium ${i === 0 ? 'bg-on-brand/15 text-on-brand' : 'bg-brand/10 text-brand'}`}>推荐</span>}</span><span class={`block text-xs ${i === 0 ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={i === 0 ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span></button>;
     })}</div>
     </form>
     <a href={backHref} class="mt-6 inline-block text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Back</a>

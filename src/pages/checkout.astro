@@ -209,8 +209,7 @@ const hasErrors = errors.length > 0;
     <h1 class="mb-1 font-serif text-3xl tracking-tight sm:text-4xl">Checkout</h1>
     <p class="mb-2 text-sm text-muted">Subtotal {formatPrice(subtotalCents, currency)} · {lines.length} item{lines.length === 1 ? '' : 's'}</p>
     <p class="mb-6 text-xs text-muted">Amount is calculated from the current product prices saved in the shop and cannot be edited at checkout.</p>
-    {isMethodAvailable('usdc', Astro.locals.settings) && <p class="mb-4 rounded-lg border border-brand bg-surface p-3 text-sm font-semibold text-brand">请优先使用 USDC 支付</p>}
-    {rail === 'waffo' && <p class="mb-4 text-sm text-muted">Waffo 支持微信支付、银行卡、Apple Pay、Google Pay（以收银台实际显示为准）。</p>}
+    {rail === 'waffo' && <p class="mb-4 text-sm text-muted">Waffo 微信支付 · 银行卡 · Apple Pay · Google Pay。</p>}
     {hasErrors && <ul class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errors.map((e) => <li>{e}</li>)}</ul>}
     {showShipping ? (
       <form method="POST" action="/checkout" class="space-y-4">
