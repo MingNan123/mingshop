@@ -50,13 +50,21 @@ export async function getProductBySlug(db: D1Database, slug: string): Promise<Pr
 export async function createProduct(db: D1Database, p: ProductInput): Promise<number> { return withPublicId('product', async (publicId) => { const row = await db.prepare(`INSERT INTO products (name, slug, description, price_cents, currency, image_key, stock, display_stock, display_sold, active, weight_grams, requires_shipping, collect_email, collect_name, collect_virtual_region, public_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`).bind(p.name, p.slug, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.display_stock, p.display_sold, p.active, p.weight_grams, p.requires_shipping, p.collect_email, p.collect_name, p.collect_virtual_region, publicId).first<{ id: number }>(); return row!.id; }); }
 export async function updateProduct(db: D1Database, id: number, p: ProductInput): Promise<void> { await db.prepare(`UPDATE products SET name = ?, slug = ?, description = ?, price_cents = ?, currency = ?, image_key = ?, stock = ?, display_stock = ?, display_sold = ?, active = ?, weight_grams = ?, requires_shipping = ?, collect_email = ?, collect_name = ?, collect_virtual_region = ? WHERE id = ?`).bind(p.name, p.slug, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.display_stock, p.display_sold, p.active, p.weight_grams, p.requires_shipping, p.collect_email, p.collect_name, p.collect_virtual_region, id).run(); }
 export async function setProductFile(db: D1Database, id: number, file: { key: string; name: string; mime: string; size: number } | null): Promise<void> { await db.prepare(`UPDATE products SET file_key = ?, file_name = ?, file_mime = ?, file_size_bytes = ? WHERE id = ?`).bind(file?.key ?? null, file?.name ?? null, file?.mime ?? null, file?.size ?? null, id).run(); }
-export async function deleteProduct(db: D1Database, id: number): Promise<void> { await db.batch([db.prepare('DELETE FROM product_categories WHERE product_id = ?').bind(id), db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(id), db.prepare('DELETE FROM products WHERE id = ?').bind(id)]); }
+export async function deleteProduct(db: D1Database, id: number): Promise<void> {
+  await deleteProducts(db, [id]);
+}
 
 export async function deleteProducts(db: D1Database, ids: number[]): Promise<void> {
   const uniqueIds = [...new Set(ids)].filter((id) => Number.isInteger(id) && id > 0);
   if (!uniqueIds.length) return;
   const statements: D1PreparedStatement[] = [];
   for (const id of uniqueIds) {
+    // Order lines own their historical name, price and digital-file snapshots.
+    // Detach catalog references instead of deleting the customer's purchase.
+    statements.push(db.prepare('UPDATE order_items SET variant_id = NULL WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = ?)').bind(id));
+    statements.push(db.prepare('UPDATE order_items SET product_id = NULL, variant_id = NULL WHERE product_id = ?').bind(id));
+    statements.push(db.prepare('DELETE FROM product_variants WHERE product_id = ?').bind(id));
+    statements.push(db.prepare('DELETE FROM product_extras WHERE product_id = ?').bind(id));
     statements.push(db.prepare('DELETE FROM product_categories WHERE product_id = ?').bind(id));
     statements.push(db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(id));
     statements.push(db.prepare('DELETE FROM products WHERE id = ?').bind(id));
