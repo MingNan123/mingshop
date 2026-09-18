@@ -211,10 +211,17 @@ curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/exp
 node - "$express_body" <<'NODE'
 const fs = require('node:fs');
 const html = fs.readFileSync(process.argv[2], 'utf8');
+const checkoutForm = html.match(/<form\b[^>]*action="\/api\/checkout"[^>]*>[\s\S]*?<\/form>/);
+if (!checkoutForm) throw new Error('express checkout form missing');
 for (const method of ['usdc', 'usdt']) {
-  const form = html.match(new RegExp(`<form[^>]*action="/checkout"[^>]*>[\\s\\S]*?<input[^>]*name="method"[^>]*value="${method}"[\\s\\S]*?</form>`));
-  if (!form) throw new Error(`physical ${method.toUpperCase()} express checkout did not route through /checkout`);
-  if (!/method="GET"/.test(form[0])) throw new Error(`physical ${method.toUpperCase()} express checkout must use GET for the address step`);
+  const buttons = checkoutForm[0].match(/<button\b[^>]*>/g) ?? [];
+  const button = buttons.find(tag => tag.includes('name="method"') && tag.includes(`value="${method}"`));
+  if (!button || !button.includes('formaction="/checkout"')) {
+    throw new Error(`physical ${method.toUpperCase()} express checkout did not route through /checkout`);
+  }
+  if (!button.includes('formmethod="GET"')) {
+    throw new Error(`physical ${method.toUpperCase()} express checkout must use GET for the address step`);
+  }
 }
 NODE
 
