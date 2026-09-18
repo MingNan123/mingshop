@@ -227,14 +227,20 @@ describe('the store-owned footer', () => {
     expect(html).toContain('My Shop');
     expect(html).toContain('href="/pages/privacy"');
     // Labelled, but the label itself belongs to the design.
-    expect(navCount(html)).toBe(1);
-    expect(labelledNavs(html).length).toBe(1);
+    expect(navCount(html)).toBe(2);
+    expect(labelledNavs(html).length).toBe(2);
+    expect(html).toContain('href="/privacy-policy"');
+    expect(html).toContain('href="/terms-of-service"');
   });
 
-  it('omits the footer nav entirely when there are no links', async () => {
+  it('keeps legal links but omits the merchant nav when its menu is empty', async () => {
     const html = await render(Footer, buildShellModel(input()));
 
-    expect(navCount(html)).toBe(0);
+    expect(navCount(html)).toBe(1);
+    expect(labelledNavs(html)).toEqual(['Legal']);
+    expect(html).not.toContain('aria-label="Footer"');
+    expect(html).toContain('href="/privacy-policy"');
+    expect(html).toContain('href="/terms-of-service"');
   });
 });
 
