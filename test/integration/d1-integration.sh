@@ -72,7 +72,6 @@ export X_LOCAL_OBSERVABILITY=false
 npx wrangler dev \
   --config wrangler.jsonc \
   --persist-to "$state_dir" \
-  --var CANONICAL_ORIGIN:https://canonical.example \
   --var AUTH_SECRET:integration-auth-secret \
   --ip 127.0.0.1 --port "$test_port" >"$worker_log" 2>&1 &
 worker_pid="$!"
