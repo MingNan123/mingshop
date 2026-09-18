@@ -65,10 +65,12 @@ for index_name in idx_orders_created idx_orders_email_created idx_products_activ
   [[ "$index_rows" == *"$index_name"* ]] || { echo "D1 integration failed: missing query index $index_name" >&2; exit 1; }
 done
 
-# Boot the actual production build against the isolated bindings.
+# Boot the same custom Worker entrypoint production uses. It wraps Astro's fetch
+# handler and owns the scheduled handler; starting Astro's generated default
+# entrypoint here would silently skip the cron path this gate is meant to prove.
 export X_LOCAL_OBSERVABILITY=false
 npx wrangler dev \
-  --config dist/server/wrangler.json \
+  --config wrangler.jsonc \
   --persist-to "$state_dir" \
   --var CANONICAL_ORIGIN:https://canonical.example \
   --var AUTH_SECRET:integration-auth-secret \
