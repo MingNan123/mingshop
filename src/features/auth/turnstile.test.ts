@@ -59,6 +59,13 @@ describe('verifyTurnstileToken', () => {
     expect(await verifyCheckoutTurnstile('tok', SECRET, 'one.mingshop123.com')).toBe(false);
   });
 
+  it('is a no-op when checkout protection is not configured', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await verifyCheckoutTurnstile(null, null, null)).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('fails closed when checkout configuration is incomplete', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
