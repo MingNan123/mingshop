@@ -44,7 +44,12 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     products.push(product);
   }
 
-  await deleteProducts(env.DB, products.map((product) => product.id));
+  try {
+    await deleteProducts(env.DB, products.map((product) => product.id));
+  } catch (error) {
+    console.error('Product bulk delete failed:', error);
+    return redirect(withMessage(fallback, 'error', '删除未完成，所选商品未被删除。请刷新列表后重试；若仍失败，请联系管理员检查关联数据。'), 303);
+  }
 
   const failedIndexes: number[] = [];
   await Promise.all(products.map(async (product) => {

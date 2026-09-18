@@ -63,30 +63,30 @@ const effectiveShipping = shippingFor(Astro.locals.settings).config;
 const shippingRequired = shipmentWeightFor(weightLines).shippingRequired;
 const stablecoinNeedsAddress = effectiveShipping.enabled && shippingRequired;
 const destination = stripeDestination(Astro.locals.settings, effectiveShipping, shippingRequired, Astro.request.headers.get('cf-ipcountry'));
-const heading = isBuyNow ? 'Buy now' : 'Checkout';
+const heading = isBuyNow ? '立即购买' : '确认订单';
 const error = Astro.url.searchParams.get('error');
 const buyerFields = buyerRequirements(weightLines.map((line) => line.product));
 const showBuyerFields = buyerFields.email || buyerFields.name || buyerFields.virtualRegion;
 const METHOD: Record<string, { label: string; hint: string }> = {
   stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more' },
-  waffo: { label: 'Pay with Waffo', hint: '微信支付 · 银行卡 · Apple Pay · Google Pay' },
+  waffo: { label: 'Waffo 支付', hint: '微信支付 · 银行卡 · Apple Pay · Google Pay' },
   lightning: { label: 'Pay with Lightning ⚡', hint: 'Instant — fixed shop amount' },
   opennode: { label: 'Pay with Bitcoin', hint: 'On-chain or Lightning (OpenNode)' },
   alipay: { label: 'Pay with Alipay', hint: 'Fixed amount from product pricing' },
   wechatpay: { label: 'Pay with WeChat Pay', hint: 'Fixed amount from product pricing' },
   usdc: { label: 'USDC 支付', hint: '按页面金额转账，到账后自动确认' },
-  usdt: { label: 'Pay with USDT', hint: 'Fixed amount · automatically confirmed on-chain' },
+  usdt: { label: 'USDT 支付', hint: '按页面金额转账，到账后自动确认' },
 };
 ---
 
-<Layout title="Checkout" description="Express checkout.">
+<Layout title="确认订单" description="核对商品信息并选择支付方式。">
   <div class="mx-auto max-w-md">
-    <p class="text-xs uppercase tracking-[0.25em] text-muted">Express checkout</p>
+    <p class="text-xs uppercase tracking-[0.25em] text-muted">确认商品 · 填写信息 · 选择支付</p>
     <h1 class="mt-2 mb-6 font-serif text-3xl tracking-tight sm:text-4xl">{heading}</h1>
-    {error && <p class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{error}</p>}
-    <ul class="divide-y divide-line border-y border-line">{lines.map((l) => <li class="flex items-center gap-4 py-4"><ProductImage imageKey={l.imageKey} alt="" usage="thumbnail" fade class="h-16 w-16 shrink-0 rounded object-cover" /><div class="min-w-0 flex-1"><p class="truncate text-sm font-medium">{l.name}</p><p class="text-xs text-muted">Qty {l.qty}</p></div><span class="tabular-nums">{formatPrice(l.unitPriceCents * l.qty)}</span></li>)}</ul>
-    <div class="mt-4 flex items-center justify-between"><span class="text-xs uppercase tracking-widest text-muted">Fixed total</span><span class="text-lg tabular-nums">{formatPrice(totalCents)}</span></div>
-    <p class="mt-2 text-xs text-muted">All payment methods use the current product prices saved by the shop. The amount cannot be edited at checkout.</p>
+    {error && <p role="alert" class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{error}</p>}
+    <ul class="divide-y divide-line border-y border-line">{lines.map((l) => <li class="flex items-center gap-4 py-4"><ProductImage imageKey={l.imageKey} alt="" usage="thumbnail" fade class="h-16 w-16 shrink-0 rounded object-cover" /><div class="min-w-0 flex-1"><p class="break-words text-sm font-medium leading-6">{l.name}</p><p class="text-xs text-muted">数量 {l.qty}</p></div><span class="tabular-nums">{formatPrice(l.unitPriceCents * l.qty)}</span></li>)}</ul>
+    <div class="mt-4 flex items-center justify-between"><span class="text-xs uppercase tracking-widest text-muted">商品合计</span><span class="text-lg tabular-nums">{formatPrice(totalCents)}</span></div>
+    <p class="mt-2 text-xs text-muted">金额由系统按商品价格计算；如需配送，运费将在后续步骤确认。</p>
     <form method="POST" action="/api/checkout" class="mt-6 space-y-3">
       {carry.map((c) => <input type="hidden" name={c.name} value={c.value} />)}
       {showBuyerFields && <div class="space-y-3 rounded-lg border border-line bg-surface p-4">
@@ -103,6 +103,6 @@ const METHOD: Record<string, { label: string; hint: string }> = {
       return <button type="submit" name="method" value={m} formaction={stablecoinAddressStep ? '/checkout' : '/api/checkout'} formmethod={stablecoinAddressStep ? 'GET' : 'POST'} class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${i === 0 ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}><span><span class="flex flex-wrap items-center gap-2 text-sm font-medium">{METHOD[m]?.label ?? m}{m === 'usdc' && <span class={`rounded-full px-2 py-0.5 text-[10px] font-medium ${i === 0 ? 'bg-on-brand/15 text-on-brand' : 'bg-brand/10 text-brand'}`}>推荐</span>}</span><span class={`block text-xs ${i === 0 ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={i === 0 ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span></button>;
     })}</div>
     </form>
-    <a href={backHref} class="mt-6 inline-block text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; Back</a>
+    <a href={backHref} class="mt-6 inline-block text-xs uppercase tracking-widest text-faint hover:text-brand">&larr; 返回</a>
   </div>
 </Layout>

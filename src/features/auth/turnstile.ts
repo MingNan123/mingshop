@@ -72,6 +72,10 @@ export async function verifyCheckoutTurnstile(
   remoteIp?: string | null,
 ): Promise<boolean> {
   const hostnames = new Set((hostnameCsv ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  // Checkout protection is opt-in. A completely absent pair means disabled;
+  // a half-configured pair fails closed so an operator mistake cannot silently
+  // weaken a store that intended to enable Turnstile.
+  if (!secret && hostnames.size === 0) return true;
   if (!secret || hostnames.size === 0) return false;
   return verifyTurnstileToken(token, secret, remoteIp, 'checkout', hostnames);
 }
