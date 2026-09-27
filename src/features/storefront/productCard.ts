@@ -2,6 +2,7 @@ import type { Product } from '../products/db';
 import { productImageSources, type ImageDelivery } from '../products/image';
 import { requirePublicId } from '../catalog/serialize';
 import { stockState } from '../products/stock';
+import { markdownExcerpt } from '../pages/markdown';
 import { formatMoney } from '../../money';
 import type { ProductCardModel, StorefrontImage } from './models';
 
@@ -24,7 +25,8 @@ export function buildProductCard(product: Product, options: ProductCardOptions):
   return {
     id: requirePublicId(product.public_id, product.id, 'product'),
     name: product.name,
-    description: product.description,
+    // Normalize legacy escaped paragraph breaks only for the card preview.
+    description: product.description == null ? null : markdownExcerpt(product.description.replace(/\\n\\n/g, '\n\n'), 160),
     href: `/products/${product.slug}`,
     image: buildStorefrontImage(product.image_key, product.name, options),
     formattedPrice: formatMoney(product.price_cents, options.currency),
