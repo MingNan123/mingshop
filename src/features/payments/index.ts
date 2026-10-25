@@ -31,9 +31,9 @@ export interface ActivePaymentMethodList extends Array<ActivePaymentMethod> {
 // Waffo is the hosted-card rail. Direct stablecoins remain available alongside
 // it; legacy providers stay wired for historical webhooks and refunds.
 const ALL_METHODS: ActivePaymentMethod[] = ['waffo', 'usdt', 'usdc'];
-// USDC stays wired for existing orders and explicit API clients, but is hidden
-// from normal storefront checkout until the merchant chooses to expose it.
-const OFFERED: ActivePaymentMethod[] = ['waffo', 'usdt'];
+// Waffo remains the storefront default. Stablecoin rails stay available as
+// secondary choices when their automatic verification is configured.
+const OFFERED: ActivePaymentMethod[] = ['waffo', 'usdt', 'usdc'];
 const WEBHOOK_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {

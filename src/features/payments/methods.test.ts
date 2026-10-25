@@ -26,9 +26,9 @@ const usdtProfile = {
 };
 
 describe('payment methods', () => {
-  it('keeps USDC hidden from normal storefront checkout', () => {
+  it('offers Waffo and both direct stablecoin entries', () => {
     const settings = parseStoreSettings([]);
-    expect(offeredMethods(settings)).toEqual(['waffo', 'usdt']);
+    expect(offeredMethods(settings)).toEqual(['waffo', 'usdt', 'usdc']);
     expect(storefrontMethods(settings)).toEqual([]);
   });
 
@@ -70,7 +70,7 @@ describe('payment methods', () => {
     expect(isMethodAvailable('usdc', settings)).toBe(true);
     expect(isMethodAvailable('usdt', settings)).toBe(true);
     expect(enabledMethods(settings)).toEqual(['usdt', 'usdc']);
-    expect(storefrontMethods(settings)).toEqual(['usdt']);
+    expect(storefrontMethods(settings)).toEqual(['usdt', 'usdc']);
   });
 
   it('keeps a coin unavailable when its only profile is disabled', () => {
