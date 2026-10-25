@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   enabledMethods,
   offeredMethods,
+  storefrontMethods,
   isMethodAvailable,
   isNewCheckoutPaymentMethod,
   isWebhookPaymentMethod,
@@ -25,9 +26,10 @@ const usdtProfile = {
 };
 
 describe('payment methods', () => {
-  it('offers Waffo and the direct stablecoin setup entries', () => {
+  it('keeps USDC hidden from normal storefront checkout', () => {
     const settings = parseStoreSettings([]);
-    expect(offeredMethods(settings)).toEqual(['waffo', 'usdt', 'usdc']);
+    expect(offeredMethods(settings)).toEqual(['waffo', 'usdt']);
+    expect(storefrontMethods(settings)).toEqual([]);
   });
 
   it('does not accept legacy payment rails even when their old settings still exist', () => {
@@ -68,6 +70,7 @@ describe('payment methods', () => {
     expect(isMethodAvailable('usdc', settings)).toBe(true);
     expect(isMethodAvailable('usdt', settings)).toBe(true);
     expect(enabledMethods(settings)).toEqual(['usdt', 'usdc']);
+    expect(storefrontMethods(settings)).toEqual(['usdt']);
   });
 
   it('keeps a coin unavailable when its only profile is disabled', () => {

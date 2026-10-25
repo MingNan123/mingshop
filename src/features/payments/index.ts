@@ -31,7 +31,9 @@ export interface ActivePaymentMethodList extends Array<ActivePaymentMethod> {
 // Waffo is the hosted-card rail. Direct stablecoins remain available alongside
 // it; legacy providers stay wired for historical webhooks and refunds.
 const ALL_METHODS: ActivePaymentMethod[] = ['waffo', 'usdt', 'usdc'];
-const OFFERED: ActivePaymentMethod[] = ['waffo', 'usdt', 'usdc'];
+// USDC stays wired for existing orders and explicit API clients, but is hidden
+// from normal storefront checkout until the merchant chooses to expose it.
+const OFFERED: ActivePaymentMethod[] = ['waffo', 'usdt'];
 const WEBHOOK_METHODS: PaymentMethod[] = ['stripe', 'waffo', 'lightning', 'opennode'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
@@ -56,8 +58,9 @@ export function hasRealMethod(settings: StoreSettings, vault = vaultReady()): bo
 }
 export function paymentsInDemoMode(_settings: StoreSettings): boolean { return false; }
 export function defaultMethod(settings: StoreSettings): ActivePaymentMethod {
-  if (settings.paymentProvider === 'waffo' && isWaffoConfigured()) return 'waffo';
-  return settings.paymentProvider === 'usdc' ? 'usdc' : 'usdt';
+  if (isWaffoConfigured()) return 'waffo';
+  if (settings.usdtAutoVerifyReady) return 'usdt';
+  return 'usdc';
 }
 export function enabledMethods(settings: StoreSettings, vault = vaultReady()): ActivePaymentMethodList {
   const off = new Set(settings.disabledPaymentMethods);
@@ -69,6 +72,12 @@ export function enabledMethods(settings: StoreSettings, vault = vaultReady()): A
 export function offeredMethods(settings: StoreSettings, _vault = vaultReady()): ActivePaymentMethodList {
   const off = new Set(settings.disabledPaymentMethods);
   return OFFERED.filter((m) => !off.has(m)) as ActivePaymentMethodList;
+}
+
+/** Ready payment methods rendered in normal storefront checkout, in display order. */
+export function storefrontMethods(settings: StoreSettings, vault = vaultReady()): ActivePaymentMethodList {
+  return offeredMethods(settings, vault)
+    .filter((m) => isMethodAvailable(m, settings, vault)) as ActivePaymentMethodList;
 }
 
 export function isWebhookPaymentMethod(value: string): value is PaymentMethod {

@@ -7,7 +7,7 @@ import { shippingFor } from '../features/shipping/effective';
 import { shipmentWeightFor } from '../features/shipping/lines';
 import { stripeDestination } from '../features/shipping/destination';
 import ProductImage from '../features/products/ProductImage.astro';
-import { enabledMethods, isMethodAvailable } from '../features/payments';
+import { storefrontMethods } from '../features/payments';
 import { catalogPath } from '../features/settings/home';
 import { buyerRequirements } from '../features/checkout/buyer';
 import CheckoutTurnstile from '../features/auth/CheckoutTurnstile.astro';
@@ -15,12 +15,8 @@ import CheckoutTurnstile from '../features/auth/CheckoutTurnstile.astro';
 if (!(Astro.locals.settings?.cartEnabled ?? true)) return Astro.redirect('/', 302);
 
 const settings = Astro.locals.settings;
-const methods = settings ? enabledMethods(settings) : [];
-const ready = (m: string) => !!settings && isMethodAvailable(m as never, settings);
-const usdcReady = methods.includes('usdc') && ready('usdc');
-const orderedMethods = usdcReady ? ['usdc', ...methods.filter((m) => m !== 'usdc')] : methods;
-const preferredMethod = usdcReady ? 'usdc' : orderedMethods.find(ready);
-const methodRows = orderedMethods.map((m) => ({ m, ready: ready(m), primary: m === preferredMethod }));
+const methods = settings ? storefrontMethods(settings) : [];
+const methodRows = methods.map((m, index) => ({ m, primary: index === 0 }));
 const METHOD: Record<string, { label: string; hint: string; setupHint: string }> = {
   stripe: { label: 'Pay with card', hint: 'Visa, Mastercard, Apple Pay & more', setupHint: 'Set up card payments' },
   waffo: { label: 'Pay with Waffo', hint: '微信支付 · 银行卡 · Apple Pay · Google Pay', setupHint: 'Set up Waffo' },
@@ -49,13 +45,13 @@ const buyerFields = buyerRequirements(lines.map((line) => line.product));
 const showBuyerFields = buyerFields.email || buyerFields.name || buyerFields.virtualRegion;
 ---
 
-<Layout title="Cart">
-  <h1 class="mb-10 font-serif text-4xl tracking-tight">Your cart</h1>
+<Layout title="购物车">
+  <h1 class="mb-10 font-serif text-4xl tracking-tight">购物车</h1>
 
   {error && <p class="mb-8 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{error}</p>}
 
   {lines.length === 0 ? (
-    <p class="text-muted">Your cart is empty. <a href={shopHref} class="border-b border-brand text-brand">Continue shopping</a>.</p>
+    <p class="text-muted">购物车是空的。<a href={shopHref} class="border-b border-brand text-brand">继续购物</a></p>
   ) : (
     <Fragment>
       <ul class="border-t border-line">
@@ -66,18 +62,18 @@ const showBuyerFields = buyerFields.email || buyerFields.name || buyerFields.vir
               <span class="min-w-0">
                 <span class="block truncate">{l.product.name}</span>
                 {(l.variant || l.extras.length > 0) && <span class="block truncate text-xs text-muted">{[l.variant?.label, ...l.extras.map((e) => e.label)].filter(Boolean).join(' · ')}</span>}
-                <span class="block text-xs tabular-nums text-muted">{formatPrice(l.unitPriceCents)} each</span>
-                {l.availableStock <= 0 ? <span class="mt-1 block text-xs uppercase tracking-widest text-red-600">Out of stock</span> : l.qty > l.availableStock ? <span class="mt-1 block text-xs text-amber-700">Only {l.availableStock} available</span> : null}
+                <span class="block text-xs tabular-nums text-muted">单价 {formatPrice(l.unitPriceCents)}</span>
+                {l.availableStock <= 0 ? <span class="mt-1 block text-xs uppercase tracking-widest text-red-600">暂时售罄</span> : l.qty > l.availableStock ? <span class="mt-1 block text-xs text-amber-700">仅剩 {l.availableStock} 件</span> : null}
               </span>
             </a>
             <div class="ml-auto flex items-center gap-4">
               <form method="POST" action="/api/cart" class="flex items-center gap-2">
                 <input type="hidden" name="_action" value="update" /><input type="hidden" name="key" value={l.key} />
-                <input type="number" name="qty" min="0" max="99" value={l.qty} aria-label="Quantity" class="w-14 border-b border-line bg-transparent py-1 text-center tabular-nums focus:border-brand focus:outline-none" />
-                <button type="submit" class="text-xs uppercase tracking-widest text-faint hover:text-brand">Update</button>
+                <input type="number" name="qty" min="0" max="99" value={l.qty} aria-label="数量" class="w-14 border-b border-line bg-transparent py-1 text-center tabular-nums focus:border-brand focus:outline-none" />
+                <button type="submit" class="text-xs uppercase tracking-widest text-faint hover:text-brand">更新</button>
               </form>
               <span class="w-20 text-right tabular-nums">{formatPrice(l.lineTotalCents)}</span>
-              <form method="POST" action="/api/cart" class="flex items-center"><input type="hidden" name="_action" value="remove" /><input type="hidden" name="key" value={l.key} /><button type="submit" aria-label="Remove" class="text-xs uppercase tracking-widest text-faint hover:text-red-600">Remove</button></form>
+              <form method="POST" action="/api/cart" class="flex items-center"><input type="hidden" name="_action" value="remove" /><input type="hidden" name="key" value={l.key} /><button type="submit" aria-label="删除" class="text-xs uppercase tracking-widest text-faint hover:text-red-600">删除</button></form>
             </div>
           </li>
         ))}
@@ -85,10 +81,10 @@ const showBuyerFields = buyerFields.email || buyerFields.name || buyerFields.vir
 
       <div class="mt-10 flex justify-end">
         <div class="w-full sm:max-w-sm">
-          <div class="flex items-center justify-between"><span class="text-xs uppercase tracking-widest text-muted">Subtotal</span><span class="text-lg tabular-nums">{formatPrice(subtotalCents)}</span></div>
-          <p class="mt-2 text-xs text-muted">The payable amount is locked to the current product, option and shipping prices stored by the shop.</p>
+          <div class="flex items-center justify-between"><span class="text-xs uppercase tracking-widest text-muted">商品合计</span><span class="text-lg tabular-nums">{formatPrice(subtotalCents)}</span></div>
+          <p class="mt-2 text-xs text-muted">应付金额以商店保存的商品、选项与配送价格为准。</p>
           {methods.length === 0 ? (
-            <p class="mt-4 rounded-lg border border-dashed border-line px-5 py-4 text-center text-sm text-muted">Checkout is currently unavailable.</p>
+            <p class="mt-4 rounded-lg border border-dashed border-line px-5 py-4 text-center text-sm text-muted">当前暂时无法结账。</p>
           ) : (
             <form method="POST" action="/api/checkout" class="mt-4 space-y-2">
               <input type="hidden" name="source" value="cart" />
@@ -98,15 +94,13 @@ const showBuyerFields = buyerFields.email || buyerFields.name || buyerFields.vir
                 {buyerFields.name && <label class="block text-sm"><span class="mb-1 block text-muted">姓名</span><input type="text" name="name" required autocomplete="name" class="w-full rounded-md border border-line px-3 py-2" /></label>}
                 {buyerFields.virtualRegion && <label class="block text-sm"><span class="mb-1 block text-muted">虚拟地区</span><input type="text" name="virtual_region" required class="w-full rounded-md border border-line px-3 py-2" placeholder="例如：香港、美国、日本" /></label>}
               </div>}
-              {destination.showSelect && <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">Ship to<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}
+              {destination.showSelect && <label class="mb-2 flex items-center justify-between gap-2 text-xs uppercase tracking-widest text-muted">配送国家/地区<select name="country" class="rounded-md border border-line px-2 py-1.5 text-sm normal-case tracking-normal text-ink">{destination.countries.map((c) => <option value={c} selected={c === destination.defaultCountry}>{destination.label(c)}</option>)}</select></label>}
               {destination.hiddenOnly && <input type="hidden" name="country" value={destination.countries[0]} />}
               <CheckoutTurnstile />
-              {methodRows.map(({ m, ready, primary }) => ready ? (
+              {methodRows.map(({ m, primary }) => (
                 <button type="submit" name="method" value={m} formaction={['waffo', 'usdc', 'usdt'].includes(m) && stablecoinNeedsAddress ? '/checkout' : undefined} formmethod={['waffo', 'usdc', 'usdt'].includes(m) && stablecoinNeedsAddress ? 'GET' : undefined} formtarget={m === 'waffo' ? '_blank' : undefined} class={`flex w-full items-center justify-between gap-3 rounded-lg px-5 py-3 text-left transition ${primary ? 'bg-brand text-on-brand hover:bg-brand-hover' : 'border border-line text-muted hover:border-brand'}`}>
-                  <span><span class="flex items-center gap-2 text-sm font-medium">{METHOD[m]?.label ?? m}{m === 'usdc' && <span class={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${primary ? 'bg-on-brand/15 text-on-brand' : 'bg-brand/10 text-brand'}`}>推荐</span>}</span><span class={`block text-xs ${primary ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={primary ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span>
+                  <span><span class="flex items-center gap-2 text-sm font-medium">{METHOD[m]?.label ?? m}</span><span class={`block text-xs ${primary ? 'text-on-brand/70' : 'text-muted'}`}>{METHOD[m]?.hint ?? ''}</span></span><span aria-hidden="true" class={primary ? 'text-on-brand/80' : 'text-faint'}>&rarr;</span>
                 </button>
-              ) : (
-                <a href={`/payment-setup?method=${m}`} class="flex w-full items-center justify-between gap-3 rounded-lg border border-dashed border-line px-5 py-3 text-left text-faint transition hover:border-brand hover:text-brand"><span><span class="block text-sm font-medium">{METHOD[m]?.label ?? m}</span><span class="block text-xs">{METHOD[m]?.setupHint ?? 'Set up'}</span></span><span aria-hidden="true">&rarr;</span></a>
               ))}
             </form>
           )}

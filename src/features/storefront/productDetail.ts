@@ -4,7 +4,7 @@ import { getProductBySlug, listProductImages, type Product } from '../products/d
 import { listVariants, listExtras } from '../products/variants';
 import { categoriesForProduct, relatedProducts } from '../categories/db';
 import { getRelatedStored, storeRelatedIds } from '../search';
-import { enabledMethods } from '../payments';
+import { storefrontMethods } from '../payments';
 import { markdownExcerpt, renderMarkdown } from '../pages/markdown.ts';
 import { productImageSources, productImageUrl, type ImageDelivery } from '../products/image';
 import { stockState } from '../products/stock';
@@ -153,7 +153,7 @@ export async function loadProductDetail(
     };
   });
 
-  const offered = options.settings ? enabledMethods(options.settings) : [];
+  const offered = options.settings ? storefrontMethods(options.settings) : [];
   const canCheckout = offered.length > 0;
   const cartEnabled = options.settings?.cartEnabled ?? true;
   const buyNowEnabled = options.settings?.buyNowEnabled ?? true;

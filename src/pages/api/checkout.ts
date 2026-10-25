@@ -18,6 +18,7 @@ import { readCart, resolveCart } from '../../features/cart/cart';
 import {
   getPaymentProvider,
   enabledMethods,
+  storefrontMethods,
   defaultMethod,
   isMethodAvailable,
   isNewCheckoutPaymentMethod,
@@ -118,7 +119,7 @@ export const OPTIONS: APIRoute = () => new Response(null, { status: 204, headers
 // agent can choose one to pass as { method } below.
 export const GET: APIRoute = async () => {
   const settings = await getStoreSettings(env.DB);
-  const methods = enabledMethods(settings);
+  const methods = storefrontMethods(settings);
   return cjson({ available_methods: methods, default: methods[0] });
 };
 
@@ -258,12 +259,13 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     return unavailableMethodRedirect();
   }
   const available = enabledMethods(settings);
+  const storefront = storefrontMethods(settings);
   // No method enabled → no checkout. Bounce back to the cart (which says so).
-  if (available.length === 0) return redirect('/cart', 303);
+  if (available.length === 0 || (!requestedRaw && storefront.length === 0)) return redirect('/cart', 303);
   // Cart checkout passes an explicit method (the picker buttons). Express buy-now
   // passes none → use the store's default (available[0] — the default rail first).
   const selected: PaymentMethod =
-    (available.includes(requested) ? requested : available[0]) ?? defaultMethod(settings);
+    (available.includes(requested) ? requested : storefront[0]) ?? defaultMethod(settings);
 
   const cfg = getConfig();
 
@@ -514,17 +516,18 @@ async function handleJsonCheckout(request: Request, url: URL): Promise<Response>
   // available). Must be one the store actually offers.
   const jsonSettings = await getStoreSettings(env.DB);
   const available = enabledMethods(jsonSettings);
-  if (available.length === 0) {
-    return cjson({ error: 'This store is not accepting payments right now.' }, 503);
-  }
+  const storefront = storefrontMethods(jsonSettings);
   const requested =
     typeof (body as { method?: unknown }).method === 'string'
       ? ((body as { method: string }).method.trim() as PaymentMethod)
       : undefined;
+  if (available.length === 0 || (!requested && storefront.length === 0)) {
+    return cjson({ error: 'This store is not accepting payments right now.' }, 503);
+  }
   if (requested && !available.includes(requested)) {
     return cjson({ error: `Unsupported payment method "${requested}".`, available_methods: available }, 400);
   }
-  const method: PaymentMethod = requested ?? available[0] ?? defaultMethod(jsonSettings);
+  const method: PaymentMethod = requested ?? storefront[0] ?? defaultMethod(jsonSettings);
 
   const cfg = getConfig();
   const effectiveShipping = shippingFor(jsonSettings).config;

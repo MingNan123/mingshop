@@ -281,6 +281,8 @@ const SECURITY_HEADERS: Record<string, string> = {
   'x-content-type-options': 'nosniff', // don't MIME-sniff responses
   'x-frame-options': 'DENY', // block framing (clickjacking) — nothing here is meant to be embedded
   'strict-transport-security': 'max-age=31536000; includeSubDomains', // force HTTPS for a year
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
 };
 
 /** Add the security headers, rebuilding when the response's headers are immutable

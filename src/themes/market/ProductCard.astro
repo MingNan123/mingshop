@@ -13,7 +13,7 @@ const Heading = headingLevel;
 ---
 
 <li class="market-hover market-product-reveal overflow-hidden rounded-[28px] bg-[color:var(--market-surface)]" style={`--reveal-delay:${Math.min(index, 10) * 55}ms`}>
-  <a href={card.href} class="group flex h-full flex-col p-4 sm:p-5" aria-label={`查看 ${card.name}`}>
+  <a href={card.href} class="group flex h-full flex-col p-4 sm:p-5">
     <div class="relative mb-5 aspect-[4/3] overflow-hidden rounded-[22px] bg-white">
       <StoreImage
         image={card.image}
