@@ -6,6 +6,7 @@ import { categoriesForProduct, relatedProducts } from '../categories/db';
 import { getRelatedStored, storeRelatedIds } from '../search';
 import { storefrontMethods } from '../payments';
 import { markdownExcerpt, renderMarkdown } from '../pages/markdown.ts';
+import { parseProductTranslations } from '../products/translations';
 import { productImageSources, productImageUrl, type ImageDelivery } from '../products/image';
 import { stockState } from '../products/stock';
 import { catalogPath } from '../settings/home';
@@ -159,6 +160,10 @@ export async function loadProductDetail(
   const buyNowEnabled = options.settings?.buyNowEnabled ?? true;
 
   const imagePath = productImageUrl(product.image_key, options.imageBaseUrl);
+  const translations = parseProductTranslations(product.translations_json);
+  const translatedNames = Object.fromEntries(Object.entries(translations).flatMap(([locale, value]) => value.name ? [[locale, value.name]] : []));
+  const translatedDescriptions = Object.fromEntries(Object.entries(translations).flatMap(([locale, value]) => value.description ? [[locale, value.description]] : []));
+  const translatedDescriptionHtml = Object.fromEntries(Object.entries(translations).flatMap(([locale, value]) => value.description ? [[locale, renderMarkdown(value.description, { baseUrl: options.imageBaseUrl })]] : []));
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -202,6 +207,7 @@ export async function loadProductDetail(
       descriptionHtml: product.description
         ? renderMarkdown(product.description, { baseUrl: options.imageBaseUrl })
         : null,
+      translations: { name: translatedNames, description: translatedDescriptions, descriptionHtml: translatedDescriptionHtml },
       formattedPrice: formatMoney(displayPriceCents, options.currency),
       priceCents: product.price_cents,
       currency: options.currency,

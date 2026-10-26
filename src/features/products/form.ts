@@ -1,6 +1,7 @@
 import type { ProductFields } from './db';
 import { toMinorUnits } from '../../money';
 import { toGrams, type WeightUnit } from '../shipping/weight';
+import { productTranslationsFromForm } from './translations';
 
 export interface ProductFormOptions {
   /** Admin's display unit. Storage is always grams. */
@@ -48,6 +49,7 @@ export function parseProductForm(
   // Scale by the chosen currency's minor units (so 1000 JPY stores as 1000, not 100000).
   const price_cents = toMinorUnits(price, currency);
   const description = String(form.get('description') ?? '').trim() || null;
+  const translations_json = productTranslationsFromForm(form);
   // Unchecked checkboxes submit nothing, so absence means inactive.
   const active = form.get('active') != null ? 1 : 0;
   const requires_shipping = form.get('requires_shipping') != null ? 1 : 0;
@@ -70,7 +72,7 @@ export function parseProductForm(
   }
 
   return {
-    data: { name, description, price_cents, currency, stock, display_stock, display_sold, active, weight_grams, requires_shipping, collect_email, collect_name, collect_virtual_region },
+    data: { name, description, translations_json, price_cents, currency, stock, display_stock, display_sold, active, weight_grams, requires_shipping, collect_email, collect_name, collect_virtual_region },
   };
 }
 

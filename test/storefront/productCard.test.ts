@@ -51,6 +51,17 @@ describe('buildProductCard', () => {
     expect(JSON.stringify(card)).not.toContain('42');
   });
 
+  it('exposes localized storefront copy without replacing the Chinese fallback', () => {
+    const card = cardFor(product({
+      description: '中文简介',
+      translations_json: JSON.stringify({ en: { name: 'Sample product', description: 'English summary' } }),
+    }));
+    expect(card.name).toBe('Sample Tee');
+    expect(card.description).toBe('中文简介');
+    expect(card.translations?.name.en).toBe('Sample product');
+    expect(card.translations?.description.en).toBe('English summary');
+  });
+
   it('refuses a row without a public ID rather than leaking the row ID', () => {
     expect(() => cardFor(product({ public_id: null }))).toThrow(/no public_id/);
   });
@@ -108,6 +119,15 @@ describe('the store-owned product card', () => {
     expect(html).toContain('href="/products/sample-tee"');
     expect(html).toContain('Sample Tee');
     expect(html).toContain('$24.00');
+  });
+
+  it('renders translation data for the global language switcher', async () => {
+    const html = await render(ProductCard, cardFor(product({
+      translations_json: JSON.stringify({ ja: { name: 'サンプル商品' } }),
+    })));
+    expect(html).toContain('data-product-i18n=');
+    expect(html).toContain('サンプル商品');
+    expect(html).toContain('data-product-default="Sample Tee"');
   });
 
   it('shows stock and paid sales counts', async () => {

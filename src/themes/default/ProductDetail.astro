@@ -59,7 +59,7 @@ const { model, purchase } = Astro.props;
       )
     }
 
-    <h1 class="font-serif text-4xl tracking-tight">{model.name}</h1>
+    <h1 data-product-i18n={JSON.stringify(model.translations?.name ?? {})} data-product-default={model.name} class="font-serif text-4xl tracking-tight">{model.name}</h1>
     {model.digitalDelivery && <p class="mt-2 text-xs uppercase tracking-widest text-brand">Digital download</p>}
     <p
       class="mt-4 text-2xl tabular-nums text-muted"
@@ -82,7 +82,7 @@ const { model, purchase } = Astro.props;
     }
     {
       model.descriptionHtml && (
-        <div class="markdown-content mt-6 max-w-prose text-muted" set:html={model.descriptionHtml} />
+        <div data-product-i18n-html={JSON.stringify(model.translations?.descriptionHtml ?? {})} data-product-default={model.descriptionHtml} class="markdown-content mt-6 max-w-prose text-muted" set:html={model.descriptionHtml} />
       )
     }
 

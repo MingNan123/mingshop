@@ -5,6 +5,7 @@ import { stockState } from '../products/stock';
 import { markdownExcerpt } from '../pages/markdown';
 import { formatMoney } from '../../money';
 import type { ProductCardModel, StorefrontImage } from './models';
+import { parseProductTranslations } from '../products/translations';
 
 export interface StorefrontImageOptions {
   baseUrl?: string;
@@ -22,11 +23,16 @@ export function buildStorefrontImage(imageKey: string | null, alt: string, optio
 export interface ProductCardOptions extends StorefrontImageOptions { currency: string; }
 
 export function buildProductCard(product: Product, options: ProductCardOptions): ProductCardModel {
+  const translations = parseProductTranslations(product.translations_json);
   return {
     id: requirePublicId(product.public_id, product.id, 'product'),
     name: product.name,
     // Normalize legacy escaped paragraph breaks only for the card preview.
     description: product.description == null ? null : markdownExcerpt(product.description.replace(/\\n\\n/g, '\n\n'), 160),
+    translations: {
+      name: Object.fromEntries(Object.entries(translations).flatMap(([locale, value]) => value.name ? [[locale, value.name]] : [])),
+      description: Object.fromEntries(Object.entries(translations).flatMap(([locale, value]) => value.description ? [[locale, markdownExcerpt(value.description.replace(/\\n\\n/g, '\n\n'), 160)]] : [])),
+    },
     href: `/products/${product.slug}`,
     image: buildStorefrontImage(product.image_key, product.name, options),
     formattedPrice: formatMoney(product.price_cents, options.currency),

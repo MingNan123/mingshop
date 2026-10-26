@@ -313,6 +313,13 @@ const shell = buildShellModel({
           '搜索': ['搜尋', 'Search', '검색', '検索'],
           '搜索商品': ['搜尋商品', 'Search products', '상품 검색', '商品を検索'],
           '数量': ['數量', 'Quantity', '수량', '数量'],
+          '库存': ['庫存', 'Stock', '재고', '在庫'],
+          '已售': ['已售', 'Sold', '판매량', '販売数'],
+          '查看产品': ['查看產品', 'View product', '상품 보기', '商品を見る'],
+          '查看详情': ['查看詳情', 'View details', '상세 보기', '詳細を見る'],
+          '暂时售罄': ['暫時售罄', 'Sold out', '품절', '売り切れ'],
+          'Details': ['詳細說明', 'Details', '상세 설명', '商品詳細'],
+          'Related': ['相關商品', 'Related products', '관련 상품', '関連商品'],
           '更新': ['更新', 'Update', '업데이트', '更新'],
           '删除': ['刪除', 'Remove', '삭제', '削除'],
           '小计': ['小計', 'Subtotal', '소계', '小計'],
@@ -390,6 +397,34 @@ const shell = buildShellModel({
         const key = 'mingshop_language';
         const select = document.querySelector('[data-language-select]');
         const initial = (() => { try { const value = localStorage.getItem(key); return supported.includes(value) ? value : 'zh-Hans'; } catch { return 'zh-Hans'; } })();
+        const localizedValue = (element, language, attribute) => {
+          const raw = element.getAttribute(attribute);
+          const fallback = element.getAttribute('data-product-default') ?? '';
+          if (language === 'zh-Hans' || !raw) return fallback;
+          try {
+            const translations = JSON.parse(raw);
+            return typeof translations?.[language] === 'string' && translations[language].trim()
+              ? translations[language]
+              : fallback;
+          } catch { return fallback; }
+        };
+        const applyProductContent = (language, root) => {
+          const textElements = [];
+          const htmlElements = [];
+          if (root instanceof Element && root.matches('[data-product-i18n]')) textElements.push(root);
+          if (root instanceof Element && root.matches('[data-product-i18n-html]')) htmlElements.push(root);
+          textElements.push(...(root.querySelectorAll?.('[data-product-i18n]') ?? []));
+          htmlElements.push(...(root.querySelectorAll?.('[data-product-i18n-html]') ?? []));
+          for (const element of textElements) {
+            const value = localizedValue(element, language, 'data-product-i18n');
+            if (element.textContent !== value) element.textContent = value;
+          }
+          for (const element of htmlElements) {
+            if (element.dataset.productAppliedLanguage === language) continue;
+            element.dataset.productAppliedLanguage = language;
+            element.innerHTML = localizedValue(element, language, 'data-product-i18n-html');
+          }
+        };
         const translateText = (value, language) => {
           const trimmed = value.trim();
           const canonical = aliases.get(trimmed);
@@ -420,6 +455,7 @@ const shell = buildShellModel({
             select.value = language;
             select.setAttribute('aria-label', language === 'zh-Hans' ? '语言' : phrases['语言'][indexes[language]]);
           }
+          applyProductContent(language, root);
           const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
           const nodes = []; let node;
           while ((node = walker.nextNode())) nodes.push(node);

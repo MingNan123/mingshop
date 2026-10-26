@@ -14,11 +14,18 @@ export interface StorefrontImage {
   priority: boolean;
 }
 
+export interface ProductContentTranslations {
+  name: Record<string, string>;
+  description: Record<string, string>;
+  descriptionHtml?: Record<string, string>;
+}
+
 /** A product as a catalog/search/recommendation card. */
 export interface ProductCardModel {
   id: string;
   name: string;
   description: string | null;
+  translations?: ProductContentTranslations;
   href: string;
   image: StorefrontImage;
   formattedPrice: string;
@@ -100,6 +107,7 @@ export interface ProductDetailModel {
   name: string;
   description: string | null;
   descriptionHtml: string | null;
+  translations?: ProductContentTranslations;
   formattedPrice: string;
   priceCents: number;
   currency: string;

@@ -4,6 +4,7 @@ import type { CategoryOption } from '../categories/db';
 import { getConfig, toMajorUnits, currencyDecimals } from '../../config';
 import { formatWeightValue, type WeightUnit } from '../shipping/weight';
 import { attachmentActive } from '../digitalDelivery/rollout.ts';
+import { parseProductTranslations, PRODUCT_TRANSLATION_LOCALES } from './translations';
 
 interface Props { action:string; submitLabel:string; product?:Product|null; error?:string|null; categoryOptions?:CategoryOption[]; selectedCategoryIds?:number[]; showImage?:boolean; formId?:string; weightUnit?:WeightUnit; weightRequired?:boolean; }
 const { action, submitLabel, product=null, error=null, categoryOptions=[], selectedCategoryIds=[], showImage=true, formId, weightUnit='g', weightRequired=false } = Astro.props;
@@ -15,6 +16,8 @@ const priceStep = priceDecimals > 0 ? (10 ** -priceDecimals).toFixed(priceDecima
 const inputClass = 'mt-1 w-full rounded-md border border-line px-3 py-2 focus:border-brand focus:outline-none';
 const stablecoinAvailable = defaultCurrency.toLowerCase() === 'usd';
 const stablecoinAmount = stablecoinAvailable && price ? `${price} USDC / ${price} USDT` : null;
+const translations = parseProductTranslations(product?.translations_json);
+const localeLabels = { 'zh-Hant': '繁體中文', en: 'English', ko: '한국어', ja: '日本語' } as const;
 ---
 
 <form method="POST" action={action} enctype="multipart/form-data" id={formId} class="max-w-4xl space-y-6">
@@ -28,6 +31,23 @@ const stablecoinAmount = stablecoinAvailable && price ? `${price} USDC / ${price
           <div><label class="block text-sm font-medium" for="name">商品名称</label><input id="name" name="name" type="text" required value={product?.name ?? ''} class={inputClass} /></div>
           <div><label class="block text-sm font-medium" for="slug">商品链接 <span class="text-faint">（留空自动生成）</span></label><input id="slug" name="slug" type="text" value={product?.slug ?? ''} placeholder="auto-from-name" class={inputClass} /></div>
           <div><label class="block text-sm font-medium" for="description">商品描述</label><textarea id="description" name="description" rows="7" class={inputClass}>{product?.description ?? ''}</textarea><p class="mt-1 text-xs text-gray-500">支持纯文本或 Markdown。</p></div>
+        </div>
+      </section>
+
+      <section id="translations" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
+        <div class="mb-5"><h2 class="font-medium">商品多语言</h2><p class="mt-1 text-xs text-gray-500">填写后，商品名称和描述会跟随商城右上角的语言选择即时切换；留空时使用简体中文。</p></div>
+        <div class="space-y-5">
+          {PRODUCT_TRANSLATION_LOCALES.map((locale) => {
+            const suffix = locale.replace('-', '_').toLowerCase();
+            const value = translations[locale];
+            return <details class="rounded-md border border-line p-4" open={locale === 'en'}>
+              <summary class="cursor-pointer text-sm font-medium">{localeLabels[locale]}</summary>
+              <div class="mt-4 space-y-3">
+                <div><label class="block text-sm font-medium" for={`translation_${suffix}_name`}>商品名称</label><input id={`translation_${suffix}_name`} name={`translation_${suffix}_name`} type="text" value={value?.name ?? ''} class={inputClass} /></div>
+                <div><label class="block text-sm font-medium" for={`translation_${suffix}_description`}>商品描述</label><textarea id={`translation_${suffix}_description`} name={`translation_${suffix}_description`} rows="5" class={inputClass}>{value?.description ?? ''}</textarea><p class="mt-1 text-xs text-gray-500">支持纯文本或 Markdown。</p></div>
+              </div>
+            </details>;
+          })}
         </div>
       </section>
 
@@ -73,7 +93,7 @@ const stablecoinAmount = stablecoinAvailable && price ? `${price} USDC / ${price
 
     <aside class="h-fit space-y-4 lg:sticky lg:top-6">
       <section class="rounded-lg border border-line bg-white p-5"><h2 class="font-medium">发布</h2><label class="mt-4 flex items-center gap-2 text-sm"><input name="active" type="checkbox" checked={product ? product.active === 1 : true} class="h-4 w-4" />立即上架到商城</label><p class="mt-2 text-xs text-gray-500">关闭后商品不会在商城公开显示。</p><input type="hidden" name="currency" value={defaultCurrency} /><div class="mt-5 grid gap-2"><button type="submit" class="rounded-md bg-brand px-5 py-2.5 font-medium text-on-brand hover:bg-brand-hover">{submitLabel}</button><a href="/admin/products" class="rounded-md border border-line px-5 py-2.5 text-center hover:bg-surface">取消</a></div></section>
-      {product && <nav class="rounded-lg border border-line bg-white p-4"><p class="mb-2 text-xs font-medium uppercase tracking-widest text-gray-400">快速定位</p><div class="grid gap-1 text-sm"><a href="#basic" class="hover:text-brand">基本信息</a><a href="#pricing" class="hover:text-brand">价格与库存</a><a href="#buyer-fields" class="hover:text-brand">购买信息采集</a>{attachmentActive() && <a href="#shipping" class="hover:text-brand">配送设置</a>}{attachmentActive() && <a href="#digital" class="hover:text-brand">数字商品</a>}<a href="#categories" class="hover:text-brand">商品分类</a><a href="#gallery" class="hover:text-brand">商品图片库</a><a href="#options" class="hover:text-brand">规格与附加选项</a></div></nav>}
+      {product && <nav class="rounded-lg border border-line bg-white p-4"><p class="mb-2 text-xs font-medium uppercase tracking-widest text-gray-400">快速定位</p><div class="grid gap-1 text-sm"><a href="#basic" class="hover:text-brand">基本信息</a><a href="#translations" class="hover:text-brand">商品多语言</a><a href="#pricing" class="hover:text-brand">价格与库存</a><a href="#buyer-fields" class="hover:text-brand">购买信息采集</a>{attachmentActive() && <a href="#shipping" class="hover:text-brand">配送设置</a>}{attachmentActive() && <a href="#digital" class="hover:text-brand">数字商品</a>}<a href="#categories" class="hover:text-brand">商品分类</a><a href="#gallery" class="hover:text-brand">商品图片库</a><a href="#options" class="hover:text-brand">规格与附加选项</a></div></nav>}
     </aside>
   </div>
 </form>

@@ -68,6 +68,19 @@ describe('parseProductForm', () => {
     if ('data' in r) expect(r.data.description).toBeNull();
   });
 
+  it('serializes optional product translations and omits blank locales', () => {
+    const r = parseProductForm(form({
+      name: '商品', price: '5', stock: '1',
+      translation_en_name: 'Product', translation_en_description: 'English copy',
+      translation_ja_name: '  ',
+    }));
+    if ('data' in r) {
+      expect(JSON.parse(r.data.translations_json ?? '{}')).toEqual({
+        en: { name: 'Product', description: 'English copy' },
+      });
+    }
+  });
+
   it('rejects an empty name', () => {
     expect('error' in parseProductForm(form({ name: '  ', price: '5', stock: '1' }))).toBe(true);
   });
