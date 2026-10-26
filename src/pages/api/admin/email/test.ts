@@ -3,6 +3,7 @@ import { getEmailProvider } from '../../../../features/email';
 import { isValidEmailAddress } from '../../../../features/email/recipients';
 import { getStoreSettings } from '../../../../features/settings/db';
 import { env } from 'cloudflare:workers';
+import { emailDeliveryError } from '../../../../features/email/deliveryError';
 
 export const prerender = false;
 
@@ -37,8 +38,15 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       html: `<p>This is a test email from your ${storeName} admin. Email delivery is working ✅</p>`,
       text: `This is a test email from your ${storeName} admin. Email delivery is working.`,
     });
-    return done(true, `Test email sent to ${to}.`);
+    // Only recover unsent domain-verification failures after a successful send.
+    // Previously delivered receipts must never be replayed by this action.
+    const recovered = await env.DB.prepare(`UPDATE order_notifications
+      SET state = 'pending', attempts = 0, lease_expires_at = NULL, last_error = NULL
+      WHERE state = 'dead' AND sent_at IS NULL
+        AND last_error LIKE '%domain is not verified%'
+        AND created_at >= datetime('now', '-7 days')`).run();
+    return done(true, `测试邮件已提交至 ${to}。${recovered.meta.changes ? `已恢复 ${recovered.meta.changes} 封因域名验证失败而未发送的订单邮件，系统将自动重试。` : ''}`);
   } catch (err) {
-    return done(false, `Send failed: ${(err as Error).message || 'unknown error'}`);
+    return done(false, emailDeliveryError(err));
   }
 };

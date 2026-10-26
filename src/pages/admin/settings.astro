@@ -1,5 +1,9 @@
 ---
 import { env } from 'cloudflare:workers';
+import { emailDeliveryError } from '../../features/email/deliveryError';
+const recentEmailFailure = await env.DB.prepare(`SELECT last_error FROM order_notifications
+  WHERE state IN ('pending', 'dead') AND last_error IS NOT NULL
+  ORDER BY created_at DESC LIMIT 1`).first<{ last_error: string }>();
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import MediaPicker from '../../features/media/MediaPicker.astro';
 import { setLogoFromMedia } from '../../features/media/db';
@@ -1637,6 +1641,12 @@ const sections = [
 
   {/* ── Email (runtime config + vault key) ───────────────────────────────── */}
   <section id="email" class="mt-10 scroll-mt-16">
+    {recentEmailFailure && <div role="alert" class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      <p class="font-semibold">订单邮件发送失败</p>
+      <p class="mt-1">{emailDeliveryError(recentEmailFailure.last_error)}</p>
+      <p class="mt-2">新订单提醒邮箱接收已付款订单通知；客户登录邮件发送登录链接，两者都依赖有效的发件配置。</p>
+      <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block underline">打开 Resend 域名验证</a>
+    </div>}
     <h2 class="mb-2 text-lg font-bold">Email</h2>
     <p class="mb-4 text-sm text-gray-500">
       Order-confirmation and customer-login email. <strong>Resend</strong> works on the Workers
