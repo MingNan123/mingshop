@@ -35,7 +35,7 @@ const localeLabels = { 'zh-Hant': '繁體中文', en: 'English', ko: '한국어'
       </section>
 
       <section id="translations" class="scroll-mt-24 rounded-lg border border-line bg-white p-5">
-        <div class="mb-5"><h2 class="font-medium">商品多语言</h2><p class="mt-1 text-xs text-gray-500">填写后，商品名称和描述会跟随商城右上角的语言选择即时切换；留空时使用简体中文。</p></div>
+        <div class="mb-5"><h2 class="font-medium">商品多语言</h2><p class="mt-1 text-xs text-gray-500">保存后自动生成繁体、英文、韩文和日文译文，完成后随商城语言切换显示。翻译期间先显示中文；可手动调整译文，系统会保留你的修改。</p></div>
         <div class="space-y-5">
           {PRODUCT_TRANSLATION_LOCALES.map((locale) => {
             const suffix = locale.replace('-', '_').toLowerCase();

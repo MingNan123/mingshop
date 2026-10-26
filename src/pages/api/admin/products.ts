@@ -23,6 +23,7 @@ import { uploadDigitalFile, validateDigitalFile } from '../../../features/produc
 import { attachmentActive } from '../../../features/digitalDelivery/rollout.ts';
 import { CACHE_TAG } from '../../../features/cache/tags';
 import { purgeCacheTags } from '../../../features/cache/purge';
+import { scheduleProductTranslation } from '../../../features/products/scheduleTranslation';
 
 export const prerender = false;
 
@@ -103,5 +104,6 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     CACHE_TAG.catalog,
     ...(created?.public_id ? [CACHE_TAG.product(created.public_id)] : []),
   ]);
+  await scheduleProductTranslation(productId, locals.cfContext);
   return redirect('/admin/products', 303);
 };

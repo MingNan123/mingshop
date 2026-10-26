@@ -8,6 +8,9 @@ import {
 import { getSetting } from './features/settings/db';
 import { sweepStablecoinPayments } from './features/payments/stablecoin-watcher';
 import { scheduledOrigin } from './features/http/origin';
+import { processProductTranslation } from './features/products/autoTranslate';
+import { purgeCacheTags } from './features/cache/purge';
+import { CACHE_TAG } from './features/cache/tags';
 
 async function releaseExpiredUsdtReservations(): Promise<void> {
   const { results } = await env.DB.prepare(
@@ -46,6 +49,15 @@ async function runScheduledSweeps(): Promise<void> {
     if (origin) await sweepStaleNotifications(db, origin);
   } catch (err) {
     console.error('Scheduled notification sweep failed:', err);
+  }
+  // Translation work follows payment/inventory sweeps so inference latency
+  // cannot postpone payment confirmation or reservation cleanup.
+  if (env.AI) {
+    try {
+      if (await processProductTranslation(db, env.AI)) await purgeCacheTags([CACHE_TAG.catalog]);
+    } catch (error) {
+      console.error('Scheduled product translation failed', error);
+    }
   }
 }
 

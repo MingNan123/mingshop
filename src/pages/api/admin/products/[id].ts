@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { scheduleProductTranslation } from '../../../../features/products/scheduleTranslation';
 import { env } from 'cloudflare:workers';
 import {
   getProduct,
@@ -145,5 +146,6 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   } catch (err) { console.error('Search index (update) failed:', err); }
 
   await purgeCacheTags([CACHE_TAG.catalog, CACHE_TAG.product(publicId)]);
-  return redirect(addQuery(returnTo, 'message', '商品已更新，页面已刷新。'), 303);
+  await scheduleProductTranslation(id, locals.cfContext);
+  return redirect(addQuery(returnTo, 'message', '商品已更新，缺少的译文将在后台自动生成。'), 303);
 };
