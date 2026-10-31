@@ -6,7 +6,7 @@ import { env } from 'cloudflare:workers';
 import { countUnresolvedInventoryExceptions } from '../features/orders/db';
 import '../styles/admin.css';
 
-type Section = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'media' | 'pages' | 'navigation' | 'shipping' | 'settings';
+type Section = 'dashboard' | 'products' | 'orders' | 'payments' | 'customers' | 'categories' | 'media' | 'pages' | 'navigation' | 'shipping' | 'settings';
 interface Props { title?: string; active?: Section; }
 const { title, active } = Astro.props;
 const config = getConfig();
@@ -20,6 +20,7 @@ const nav: { key: Section; label: string; href: string }[] = [
   { key: 'dashboard', label: '仪表盘', href: '/admin' },
   { key: 'products', label: '商品', href: '/admin/products' },
   { key: 'orders', label: '订单', href: '/admin/orders' },
+  { key: 'payments', label: '交易对账', href: '/admin/payments' },
   { key: 'customers', label: '客户', href: '/admin/customers' },
   { key: 'categories', label: '分类', href: '/admin/categories' },
   { key: 'pages', label: '页面', href: '/admin/pages' },

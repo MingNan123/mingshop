@@ -45,9 +45,11 @@ export function isWaffoConfigured(): boolean {
   );
 }
 
-function createClient() {
+export function createWaffoClient() {
   const { merchantId, privateKey } = getWaffoConfig();
-  return new WaffoPancake({ merchantId, privateKey });
+  return new WaffoPancake({ merchantId, privateKey,
+    fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }),
+  });
 }
 
 function displayAmount(minorUnits: number, currency: string): string {
@@ -108,7 +110,7 @@ export function createWaffoProvider(): PaymentProvider {
   return {
     async createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult> {
       const { productId, taxCategory } = getWaffoConfig();
-      const client = createClient();
+      const client = createWaffoClient();
       const subtotalMinor = params.lineItems.reduce((sum, line) => sum + line.amountCents * line.quantity, 0);
 
       // Waffo checkout does not require an address. A shipping address/rate is

@@ -1,0 +1,33 @@
+---
+import {env} from 'cloudflare:workers';
+import {formatPrice,formatDate,getConfig} from '../config';
+import {merchantLedgerSummary} from '../features/payments/waffoLedgerDb';
+const {totals,state}=await merchantLedgerSummary(env.DB);
+const timeZone=Astro.locals.settings?.timeZone??getConfig().timeZone;
+---
+<section class="mb-8 rounded-lg border border-line bg-white p-5" aria-label="Waffo 实际付款">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-base font-semibold">Waffo 实际付款</h2>
+      <p class="mt-1 text-xs text-gray-500">按 Waffo 原币交易金额汇总，参考汇率折算不参与记账；客户实付含税，不等同于扣除手续费后的商户到账金额。</p>
+    </div>
+    <form method="POST" action="/api/admin/waffo/sync">
+      <button type="submit" class="rounded-full border border-line px-4 py-2 text-sm">同步商户付款</button>
+    </form>
+  </div>
+  {state?.last_error && <p class="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-900">上次同步失败：{state.last_error}。下方保留最近一次成功结果。</p>}
+  {totals.length>0 ? <div class="mt-5 grid gap-4 sm:grid-cols-2">
+    {totals.map(total=><div class="rounded-lg bg-gray-50 p-4">
+      <p class="text-xs text-gray-500">{total.currency} 客户实付 · {total.payments} 笔成功付款</p>
+      <p class="mt-2 text-2xl font-semibold tabular-nums">{formatPrice(total.amount_minor,total.currency)}</p>
+      <p class="mt-2 text-xs text-gray-500">已退款 {formatPrice(total.refunded_minor,total.currency)}
+        {total.unknown_refunds>0 ? ` · ${total.unknown_refunds} 笔退款金额待核对` : ` · 扣除退款后 ${formatPrice(total.amount_minor-total.refunded_minor,total.currency)}`}
+      </p>
+      {total.unmatched>0 && <p class="mt-2 text-xs text-amber-800">{total.unmatched} 笔与商店订单尚未核对一致，请查看交易对账。</p>}
+    </div>)}
+  </div> : <p class="mt-4 text-sm text-gray-500">{state?.last_success_at ? '商户平台暂无成功付款。' : '尚未完成首次同步，请点击“同步商户付款”。'}</p>}
+  <div class="mt-4 flex flex-wrap justify-between gap-2 text-xs text-gray-500">
+    <span>{state?.last_success_at ? `最近成功同步：${formatDate(state.last_success_at,undefined,timeZone)}` : '同步完成后显示商户平台的实际付款数据'} · 每 5 分钟自动检查</span>
+    <a href="/admin/payments" class="text-accent hover:underline">查看交易对账 →</a>
+  </div>
+</section>

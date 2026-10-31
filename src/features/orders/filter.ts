@@ -41,6 +41,7 @@ export const ORDER_STATUS_OPTIONS: { value: OrderStatusFilter; label: string }[]
 ];
 
 export const ORDER_METHOD_OPTIONS: { value: string; label: string }[] = [
+  { value: 'waffo', label: 'Waffo' },
   { value: 'stripe', label: 'Card (Stripe)' },
   { value: 'lightning', label: 'Lightning' },
   { value: 'opennode', label: 'Bitcoin (OpenNode)' },

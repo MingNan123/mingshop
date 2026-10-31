@@ -11,6 +11,7 @@ import { scheduledOrigin } from './features/http/origin';
 import { processProductTranslation } from './features/products/autoTranslate';
 import { purgeCacheTags } from './features/cache/purge';
 import { CACHE_TAG } from './features/cache/tags';
+import { syncWaffoPayments } from './features/payments/waffoSync';
 
 async function releaseExpiredUsdtReservations(): Promise<void> {
   const { results } = await env.DB.prepare(
@@ -49,6 +50,12 @@ async function runScheduledSweeps(): Promise<void> {
     if (origin) await sweepStaleNotifications(db, origin);
   } catch (err) {
     console.error('Scheduled notification sweep failed:', err);
+  }
+  try {
+    await syncWaffoPayments();
+  } catch {
+    // The dashboard retains the actionable provider error and last good data.
+    console.error('Scheduled Waffo payment reconciliation failed');
   }
   // Translation work follows payment/inventory sweeps so inference latency
   // cannot postpone payment confirmation or reservation cleanup.

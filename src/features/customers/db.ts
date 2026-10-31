@@ -38,10 +38,11 @@ export async function listCustomers(
 }
 
 /** Distinct customer count (for the dashboard). */
-export async function countCustomers(db: D1Database): Promise<number> {
+export async function countCustomers(db: D1Database,includeDemo=true): Promise<number> {
   const row = await db
     .prepare(
-      "SELECT COUNT(DISTINCT email) AS n FROM orders WHERE email IS NOT NULL AND email != ''",
+      `SELECT COUNT(DISTINCT email) AS n FROM orders WHERE email IS NOT NULL AND email != ''
+        ${includeDemo?'':"AND COALESCE(payment_method,'stripe')!='demo'"}`,
     )
     .first<{ n: number }>();
   return row?.n ?? 0;

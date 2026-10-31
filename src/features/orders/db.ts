@@ -258,7 +258,7 @@ export interface DailyTotal {
  * zero-filled gaps so the series is continuous for charting. Net = total minus
  * any refunds, so a refunded order stops inflating the day it was placed.
  */
-export async function dailyOrderTotals(db: D1Database, days: number): Promise<DailyTotal[]> {
+export async function dailyOrderTotals(db: D1Database, days: number,filter:OrderFilter=EMPTY_FILTER): Promise<DailyTotal[]> {
   const { results } = await db
     .prepare(
       `SELECT date(created_at) AS day,
@@ -266,9 +266,10 @@ export async function dailyOrderTotals(db: D1Database, days: number): Promise<Da
               COALESCE(SUM(amount_total_cents - refunded_cents), 0) AS total_cents
          FROM orders
         WHERE created_at >= date('now', ?)
+          ${filter.where ? `AND (${filter.where.slice(6)})` : ''}
         GROUP BY day`,
     )
-    .bind(`-${days - 1} days`)
+    .bind(`-${days - 1} days`,...filter.params)
     .all<DailyTotal>();
   const byDay = new Map((results ?? []).map((r) => [r.day, r]));
 
@@ -288,14 +289,16 @@ export async function dailyOrderTotals(db: D1Database, days: number): Promise<Da
  */
 export async function orderStats(
   db: D1Database,
+  filter:OrderFilter=EMPTY_FILTER,
 ): Promise<{ count: number; revenue_cents: number; refunded_cents: number }> {
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS count,
               COALESCE(SUM(amount_total_cents - refunded_cents), 0) AS revenue_cents,
               COALESCE(SUM(refunded_cents), 0)                      AS refunded_cents
-         FROM orders`,
+         FROM orders ${filter.where}`,
     )
+    .bind(...filter.params)
     .first<{ count: number; revenue_cents: number; refunded_cents: number }>();
   return {
     count: row?.count ?? 0,

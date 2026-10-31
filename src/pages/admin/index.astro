@@ -3,28 +3,34 @@ import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { formatPrice, getConfig } from '../../config';
 import { countAllProducts, lowStockProducts } from '../../features/products/db';
-import { listOrders, orderStats, dailyOrderTotals } from '../../features/orders/db';
+import { listOrders, orderStats, dailyOrderTotals,countOrders } from '../../features/orders/db';
+import {liveOrderFilter} from '../../features/orders/live';
+import WaffoPaymentSummary from '../../components/WaffoPaymentSummary.astro';
 import { countCustomers } from '../../features/customers/db';
 import { orderReference } from '../../features/orders/number';
 import RevenueChart from '../../components/RevenueChart.astro';
 
 if (!Astro.locals.settings?.setupComplete) return Astro.redirect('/admin/setup', 302);
 
-const stats = await orderStats(env.DB);
+const liveFilter=liveOrderFilter({where:'',params:[]});
+const currency=getConfig().currency.toUpperCase();
+const currencyFilter={where:`${liveFilter.where} AND UPPER(currency)=? AND status!='pending'`,params:[currency]};
+const stats = await orderStats(env.DB,currencyFilter);
+const liveCount=await countOrders(env.DB,liveFilter);
 const productCount = await countAllProducts(env.DB);
-const customerCount = await countCustomers(env.DB);
-const daily = await dailyOrderTotals(env.DB, 14);
-const recent = await listOrders(env.DB, 5);
+const customerCount = await countCustomers(env.DB,false);
+const daily = await dailyOrderTotals(env.DB, 14,currencyFilter);
+const recent = await listOrders(env.DB, 5,'created_at DESC',0,liveFilter);
 const lowStock = await lowStockProducts(env.DB, 5, 8);
 const onCfg = getConfig().orderNumber;
 
 const cards = [
   {
-    label: '净营业额',
+    label: `订单净额 · ${currency}`,
     value: formatPrice(stats.revenue_cents),
-    sub: stats.refunded_cents > 0 ? `${formatPrice(stats.refunded_cents)} 已退款` : null,
+    sub: stats.refunded_cents > 0 ? `${formatPrice(stats.refunded_cents)} 已退款` : '订单原币金额，不含演示订单',
   },
-  { label: '订单', value: String(stats.count), sub: null },
+  { label: '正式订单', value: String(liveCount), sub: null },
   { label: '商品', value: String(productCount), sub: null },
   { label: '客户', value: String(customerCount), sub: null },
 ];
@@ -46,6 +52,7 @@ const cards = [
   <div class="mb-12 rounded-lg border border-line p-5">
     <RevenueChart data={daily} />
   </div>
+  <WaffoPaymentSummary />
 
   <div class="grid gap-12 lg:grid-cols-2">
     <section>

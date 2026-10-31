@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { listOrders } from '../../../features/orders/db';
 import { parseOrderFilters, orderFilterClause } from '../../../features/orders/filter';
+import {liveOrderFilter} from '../../../features/orders/live';
 import { getConfig, toMajorUnits, currencyDecimals } from '../../../config';
 import { orderReference } from '../../../features/orders/number';
 
@@ -20,7 +21,8 @@ const money = (cents: number, currency: string): string =>
 export const GET: APIRoute = async ({ url }) => {
   // Parsed with the same helpers the list page uses, so "Export these" returns
   // exactly the rows the merchant was looking at.
-  const filter = orderFilterClause(parseOrderFilters(url.searchParams));
+  const filters=parseOrderFilters(url.searchParams);
+  const filter = liveOrderFilter(orderFilterClause(filters),url.searchParams.get('include_demo')==='1'||filters.method==='demo');
   const orders = await listOrders(env.DB, 100_000, 'created_at DESC', 0, filter);
   const onCfg = getConfig().orderNumber;
 

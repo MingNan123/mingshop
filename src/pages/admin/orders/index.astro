@@ -14,6 +14,8 @@ import { orderByClause } from '../../../features/orders/sort';
 import { orderReference } from '../../../features/orders/number';
 import { paginate, queryHref } from '../../../pagination';
 import Pagination from '../../../components/Pagination.astro';
+import { liveOrderFilter } from '../../../features/orders/live';
+import { merchantPaymentsForOrders } from '../../../features/payments/waffoLedgerDb';
 import FilterBar from '../../../components/FilterBar.astro';
 import {
   parseOrderFilters,
@@ -60,9 +62,10 @@ const sort = Astro.url.searchParams.get('sort');
 const dir = Astro.url.searchParams.get('dir');
 const filters = parseOrderFilters(Astro.url.searchParams);
 // One clause, both queries — otherwise the pager counts rows the table filtered out.
-const filterClause = orderFilterClause(filters);
+const includeDemo = Astro.url.searchParams.get('include_demo') === '1' || filters.method === 'demo';
+const filterClause = liveOrderFilter(orderFilterClause(filters),includeDemo);
 const filtered = hasOrderFilters(filters);
-const filterQuery = orderFilterParams(filters);
+const filterQuery = {...orderFilterParams(filters),include_demo:includeDemo?'1':undefined};
 
 const PAGE_SIZE = 50;
 const matchCount = await countOrders(env.DB, filterClause);
@@ -74,6 +77,7 @@ const orders = await listOrders(
   offset,
   filterClause,
 );
+const merchantPayments = await merchantPaymentsForOrders(env.DB,orders.map(o=>o.id));
 // Sort and pagination links carry the active filters, so paging or re-sorting a
 // filtered list doesn't silently drop back to everything.
 const hrefFor = (p: number) =>
@@ -248,7 +252,7 @@ const listError = Astro.url.searchParams.get('error');
     active={filtered}
     count={matchCount}
     noun="order"
-    hidden={{ sort: sort ?? undefined, dir: dir ?? undefined }}
+    hidden={{ sort: sort ?? undefined, dir: dir ?? undefined,include_demo:includeDemo?'1':undefined }}
     selects={[
       {
         name: 'status',
@@ -277,6 +281,11 @@ const listError = Astro.url.searchParams.get('error');
     ]}
   />
 
+  <div class="mb-5 flex flex-wrap justify-between gap-3 text-xs text-gray-500">
+    <p>{includeDemo ? '当前包含演示订单；演示付款不会计入仪表盘营业额。' : '当前已排除演示订单。订单总计保留原币金额，Waffo 付款金额可在交易对账中核对。'}</p>
+    <a class="text-accent hover:underline" href={queryHref('/admin/orders',{...filterQuery,method:filters.method==='demo'?undefined:filters.method??undefined,include_demo:includeDemo?undefined:'1'})}>{includeDemo?'仅查看正式订单':'查看全部（含演示）'}</a>
+  </div>
+
   <div class="sm:overflow-x-auto">
     <table class="admin-table w-full text-left text-sm">
     <thead>
@@ -294,6 +303,7 @@ const listError = Astro.url.searchParams.get('error');
         <th class="py-3 pr-4 font-normal">
           <a href={sortHref('status')} class="hover:text-brand">Status{arrow('status')}</a>
         </th>
+        <th class="py-3 pr-4 font-normal">Waffo 客户实付</th>
         <th class="py-3 pr-4 font-normal">
           <a href={sortHref('fulfillment')} class="hover:text-brand">Fulfillment{arrow('fulfillment')}</a>
         </th>
@@ -346,6 +356,9 @@ const listError = Astro.url.searchParams.get('error');
               <span class="rounded-full bg-white px-2 py-0.5 text-xs uppercase tracking-wide text-gray-500 ring-1 ring-line">
                 {o.status}
               </span>
+            </td>
+            <td data-label="Waffo 客户实付" class="py-3 pr-4 text-xs tabular-nums">
+              {o.payment_method==='waffo' ? (merchantPayments.get(o.id)?.length ? merchantPayments.get(o.id)!.map(p=><a href="/admin/payments" class="block text-accent hover:underline">{formatPrice(p.amount_minor,p.currency)} {p.currency}{p.match_status==='matched'?' ✓':' · 待核对'}</a>) : <a href="/admin/payments" class="text-gray-500">待同步核对</a>) : '—'}
             </td>
             <td data-label="Fulfillment" class="py-3 pr-4">
               <span

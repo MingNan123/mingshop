@@ -3,17 +3,30 @@ set -euo pipefail
 
 # Clean-room Worker + D1 gate. Everything lives in an isolated Miniflare state
 # directory, so neither a developer's normal local DB nor production is touched.
-state_dir="$(mktemp -d "${TMPDIR:-/tmp}/minshop-d1-integration.XXXXXX")"
+state_parent="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+state_dir="$(mktemp -d "$state_parent/minshop-d1-integration.XXXXXX")"
 worker_log="$state_dir/worker.log"
 worker_pid=""
 test_port="${D1_TEST_PORT:-8791}"
 
 cleanup() {
   if [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null; then
+    # On Git Bash, killing only the npx shell leaves its Windows children
+    # holding SQLite files open. Terminate only this test's own process tree.
+    if command -v taskkill.exe >/dev/null 2>&1; then
+      native_pid="$(ps -p "$worker_pid" 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="WINPID") col=i; next} col {print $col; exit}' || true)"
+      if [[ "$native_pid" =~ ^[0-9]+$ ]]; then
+        MSYS_NO_PATHCONV=1 taskkill.exe /PID "$native_pid" /T /F >/dev/null 2>&1 || true
+      fi
+    fi
     kill "$worker_pid" 2>/dev/null || true
     wait "$worker_pid" 2>/dev/null || true
   fi
-  rm -rf "$state_dir"
+  # state_parent is canonical and mktemp created this exact child directory.
+  case "$state_dir" in
+    "$state_parent"/minshop-d1-integration.*) rm -rf -- "$state_dir" ;;
+    *) echo 'Refusing to remove an unexpected test directory' >&2; return 1 ;;
+  esac
 }
 trap cleanup EXIT INT TERM
 
@@ -74,6 +87,7 @@ npx wrangler dev \
   --persist-to "$state_dir" \
   --var CANONICAL_ORIGIN:https://canonical.example \
   --var AUTH_SECRET:integration-auth-secret \
+  --var TURNSTILE_SECRET: --var TURNSTILE_HOSTNAMES: \
   --ip 127.0.0.1 --port "$test_port" >"$worker_log" 2>&1 &
 worker_pid="$!"
 
@@ -278,7 +292,7 @@ switch_status="$(curl --max-time 30 --silent --output "$switch_body" --write-out
 # A physical stablecoin order without ship_to is rejected before stock is held.
 no_ship_body="$state_dir/no-ship.json"
 no_ship_status="$(curl --max-time 30 --silent --output "$no_ship_body" --write-out '%{http_code}' -H 'content-type: application/json' -H "origin: http://127.0.0.1:$test_port" --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"usdc"}' "http://127.0.0.1:$test_port/api/checkout")"
-[[ "$no_ship_status" == "400" ]] || { echo "D1 integration failed: physical USDC without ship_to HTTP $no_ship_status" >&2; exit 1; }
+[[ "$no_ship_status" == "400" ]] || { echo "D1 integration failed: physical USDC without ship_to HTTP $no_ship_status" >&2; head -c 1200 "$no_ship_body" >&2; tail -n 40 "$worker_log" >&2; exit 1; }
 
 # Retired rails are not merely hidden in UI; the JSON boundary rejects them.
 for retired in demo stripe alipay wechatpay lightning opennode; do
